@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Hypothesis test artifacts
+.hypothesis/
+
+# Runtime logs
+logs/
+screenshots/
+
+# IDE
+.idea/
+.vscode/
+
+# Config (keep template, ignore local overrides)
+config.yaml
+
+# ADB
+adb/
+platform-tools/
+
+# OS
+Thumbs.db
+.DS_Store

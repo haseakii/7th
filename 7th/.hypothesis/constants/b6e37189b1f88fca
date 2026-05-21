@@ -1,4 +1,0 @@
-# file: D:\software\7th\7th\config_manager.py
-# hypothesis_version: 6.151.10
-
-[200, 8080, '127.0.0.1:16384', 'ADB', 'app', 'bookmarks', 'config.yaml', 'device', 'equipment', 'fodder', 'mystic_medals', 'r', 'shop', 'utf-8', 'w', 'webui_port']

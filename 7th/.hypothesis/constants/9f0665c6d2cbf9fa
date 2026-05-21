@@ -1,4 +1,0 @@
-# file: D:\software\7th\7th\module\device\device.py
-# hypothesis_version: 6.151.10
-
-[0.3, 5.0, 720, 1000, 1280, '-p', '-s', 'adb', 'adb.exe', 'already', 'connect', 'connected', 'exec-out', 'input', 'platform-tools', 'screencap', 'shell', 'swipe', 'tap', 'uiautomator2', '无可用截图，跳过错误截图保存']
