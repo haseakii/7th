@@ -1,0 +1,2 @@
+class RequestHumanTakeover(Exception):
+    pass

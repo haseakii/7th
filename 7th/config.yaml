@@ -1,0 +1,16 @@
+device:
+  serial: 127.0.0.1:16384
+  screenshot_method: ADB
+  control_method: ADB
+shop:
+  buy_bookmarks: true
+  buy_mystic_medals: true
+  buy_equipment: false
+  buy_fodder: false
+  max_refresh_count: 200
+  gold_threshold: 0
+  skystone_threshold: 0
+  max_bookmarks: 0
+  max_mystic_medals: 100
+  max_skystone_spend: 0
+webui_port: 8080

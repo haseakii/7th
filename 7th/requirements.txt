@@ -1,0 +1,5 @@
+hypothesis==6.151.10
+paddleocr==3.4.0
+pytest==9.0.2
+uiautomator2==3.5.0
+zerorpc==0.6.3
