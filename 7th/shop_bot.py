@@ -60,10 +60,10 @@ class RunStatistics:
 
 
 class ShopBot:
-    def __init__(self, config: ConfigManager):
+    def __init__(self, config: ConfigManager, device: DeviceController = None):
         self.config = config
         cfg = config.get()
-        self.device = DeviceController(cfg.device)
+        self.device = device or DeviceController(cfg.device)
         self.navigator = ShopNavigator(self.device)
         self.recognizer = ItemRecognizer(self.device)
         self.purchase_engine = PurchaseEngine(self.device, config)

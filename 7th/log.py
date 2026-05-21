@@ -94,5 +94,27 @@ def save_error_screenshot(image: np.ndarray, name: str = "") -> str:
     return str(filepath)
 
 
+class AlasCompatibleLogger:
+    """ALAS 兼容包装，在标准 logging.Logger 上添加 hr() 等方法。"""
+
+    def __init__(self, logger_inst):
+        self._logger = logger_inst
+
+    def __getattr__(self, name):
+        return getattr(self._logger, name)
+
+    def hr(self, title="", level=1):
+        """打印分隔线，ALAS 风格。"""
+        if level == 0:
+            self._logger.info(f"{'=' * 15} {title} {'=' * 15}")
+        elif level == 1:
+            self._logger.info(f"{'-' * 10} {title} {'-' * 10}")
+        elif level == 2:
+            self._logger.info(f"{'~' * 5} {title} {'~' * 5}")
+        else:
+            self._logger.info(f"{'*' * 5} {title} {'*' * 5}")
+
+
 # 模块级 logger 实例
-logger = _setup_logger()
+_logger_inst = _setup_logger()
+logger = AlasCompatibleLogger(_logger_inst)

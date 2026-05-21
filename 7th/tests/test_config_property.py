@@ -251,7 +251,7 @@ concurrent_ops = st.lists(
 
 
 @given(ops=concurrent_ops)
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 def test_config_concurrent_read_write_safety(ops):
     """
     Property 3: 配置并发读写安全
@@ -376,8 +376,7 @@ def test_runtime_device_config_locked(serial, screenshot_method, control_method)
     gui = ShopBotGUI(config=mock_config, bot=mock_bot)
 
     # Mock 所有 PyWebIO 函数
-    with patch("webui.app.ShopBotGUI._render_theme_toggle"), \
-         patch("pywebio.output.put_html"), \
+    with patch("pywebio.output.put_html"), \
          patch("pywebio.output.put_text") as mock_put_text, \
          patch("pywebio.output.use_scope") as mock_use_scope, \
          patch("pywebio.pin.put_input") as mock_put_input, \

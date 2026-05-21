@@ -172,6 +172,7 @@ def _make_shop_items(n: int):
     return [
         ShopItem(
             item_type="bookmark",
+            currency="gold",
             price=184000,
             slot_index=i,
             position=(100 * i, 200, 100 * i + 80, 350),
@@ -225,7 +226,12 @@ def test_safe_stop_does_not_interrupt_purchase(num_items):
     bot.device.connect = MagicMock(return_value=True)
     bot.navigator.navigate_to_secret_shop = MagicMock(return_value=True)
     bot.recognizer.recognize_shelf = MagicMock(return_value=items)
+    bot.recognizer.recognize_visible_items = MagicMock(return_value=items)
     bot.purchase_engine.process_shelf = MagicMock(side_effect=mock_process_shelf)
+
+    # Skip calibration and scroll-to-top to avoid race with delayed stop
+    bot._calibrate_before_loop = MagicMock()
+    bot._scroll_to_top = MagicMock()
 
     # Make check_resources / should_continue always want to continue
     bot.check_resources = MagicMock(return_value=True)

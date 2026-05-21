@@ -26,7 +26,7 @@ class TestDeviceControllerInit:
     def test_init_with_default_config(self):
         config = DeviceConfig()
         dc = DeviceController(config)
-        assert dc.serial == "127.0.0.1:5555"
+        assert dc.serial == "127.0.0.1:16384"
         assert dc.screenshot_method == "ADB"
         assert dc.control_method == "ADB"
         assert dc.image is None

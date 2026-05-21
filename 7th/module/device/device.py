@@ -14,7 +14,6 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-from config_manager import DeviceConfig
 from log import logger, save_error_screenshot
 from module.base.utils import random_rectangle_point
 
@@ -54,12 +53,13 @@ class DeviceController:
     SCREENSHOT_WIDTH = 1280
     SCREENSHOT_HEIGHT = 720
 
-    def __init__(self, config: DeviceConfig):
-        self.serial: str = config.serial
-        self.screenshot_method: str = config.screenshot_method
-        self.control_method: str = config.control_method
+    def __init__(self, config):
+        """支持 E7Config 和 DeviceConfig 两种配置对象。"""
+        self.serial: str = getattr(config, 'serial', None) or getattr(config, 'device_serial', '127.0.0.1:16384')
+        self.screenshot_method: str = getattr(config, 'screenshot_method', None) or getattr(config, 'device_screenshot_method', 'ADB')
+        self.control_method: str = getattr(config, 'control_method', None) or getattr(config, 'device_control_method', 'ADB')
         self.image: Optional[np.ndarray] = None
-        self._u2_device = None  # uiautomator2 设备实例（延迟初始化）
+        self._u2_device = None
 
     def connect(self, max_retries: int = 3, retry_delay: float = 5.0) -> bool:
         """连接 ADB 设备，失败重试。
