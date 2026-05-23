@@ -10,6 +10,8 @@ import time
 from dataclasses import dataclass
 from typing import List, Optional
 
+import numpy as np
+
 from config_manager import ConfigManager
 from log import logger
 from module.base.timer import Timer
@@ -419,6 +421,28 @@ class ShopBot:
     # 滑动翻页购买（先滑到顶，再逐段下滑，边滚边买）
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _shelf_is_at_bottom(prev: np.ndarray, curr: np.ndarray, threshold: float = 0.95) -> bool:
+        """通过货架区域图像相似度判断是否到底。
+
+        滑动前后对比货架区域 (y=120-540, x=300-900)，
+        相似度高于阈值则认为到底（无新内容出现）。
+
+        Args:
+            prev: 滑动前的截图
+            curr: 滑动后的截图
+            threshold: 相似度阈值（0-1），默认 0.95
+
+        Returns:
+            True 如果图像相似度超过阈值（已到底）
+        """
+        import cv2
+        gray_prev = cv2.cvtColor(prev[120:540, 300:900], cv2.COLOR_BGR2GRAY)
+        gray_curr = cv2.cvtColor(curr[120:540, 300:900], cv2.COLOR_BGR2GRAY)
+        diff = cv2.absdiff(gray_prev, gray_curr)
+        similarity = 1.0 - (float(diff.mean()) / 255.0)
+        return similarity > threshold
+
     def _scroll_to_top(self) -> None:
         """向上滑动回到货架顶部。
 
@@ -437,13 +461,14 @@ class ShopBot:
         流程：
           1. 识别当前可视物品 → 立即购买
           2. 向下滑一段 → 等待动画 → 识别新物品 → 立即购买
-          3. 比较前后两次识别结果，无变化则认为到底
+          3. 图像相似度检测底部（快速）→ 备选 OCR 结果对比
 
         Returns:
             本轮所有购买结果
         """
         all_results: List[PurchaseResult] = []
         prev_item_keys: set = set()
+        prev_shelf_image = None
 
         for scroll_count in range(MAX_SCROLL_COUNT + 1):  # +1 因为第0次不滑动
             if self._stop_event.is_set():
@@ -451,15 +476,24 @@ class ShopBot:
 
             # 第0次不滑动（已在顶部的初始视图）
             if scroll_count > 0:
-                start = (SCROLL_AREA[0], SCROLL_AREA[1])   # (640, 400)
-                end = (SCROLL_AREA[2], SCROLL_AREA[3])     # (640, 150)
+                start = (SCROLL_AREA[0], SCROLL_AREA[1])
+                end = (SCROLL_AREA[2], SCROLL_AREA[3])
                 self.device.swipe(start, end)
                 time.sleep(SCROLL_WAIT)
 
-            # 截图一次，复用给场景校验和物品识别
-            image = self.device.screenshot()
-            if image is None:
-                break
+                # 截图
+                image = self.device.screenshot()
+                if image is None:
+                    break
+
+                # 图像底部检测（比 OCR 快得多，~5ms vs ~300ms）
+                if prev_shelf_image is not None and self._shelf_is_at_bottom(prev_shelf_image, image):
+                    logger.info(f"已到达货架底部（第 {scroll_count} 次滑动，图像相似度检测）")
+                    break
+            else:
+                image = self.device.screenshot()
+                if image is None:
+                    break
 
             # 场景校验
             if not self._ensure_secret_shop(image):
@@ -469,17 +503,20 @@ class ShopBot:
             # 识别当前可视物品，立即购买
             items = self.recognizer.recognize_visible_items(image)
 
-            # 比较识别结果（去除 name_text 空白干扰），无变化则到底
+            # 备选：识别结果无变化也认为到底
             curr_keys = {(it.item_type, it.name_text.strip() if it.name_text else "", round(it.position[1] / 20))
                          for it in items}
             if prev_item_keys and curr_keys == prev_item_keys:
-                logger.info(f"已到达货架底部（第 {scroll_count} 次滑动后，识别结果无变化）")
+                logger.info(f"已到达货架底部（第 {scroll_count} 次滑动，识别结果无变化）")
                 break
             prev_item_keys = curr_keys
 
             results = self.purchase_engine.process_shelf(items)
             all_results.extend(results)
             logger.info(f"第 {scroll_count} 次查看，购买 {len(results)} 个物品")
+
+            # 保存本轮截图（购买前的快照）用于下次底部检测
+            prev_shelf_image = image
 
         return all_results
 
