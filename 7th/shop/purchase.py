@@ -59,6 +59,15 @@ class PurchaseResult:
     reason: str = ""
 
 
+@dataclass
+class _PopupState:
+    """单次 OCR 扫描弹窗的检测结果。"""
+    has_cancel: bool = False
+    has_buy_or_confirm: bool = False
+    insufficient_gold: bool = False
+    cancel_pos: Optional[Tuple[int, int]] = None
+
+
 class PurchaseEngine:
     """执行物品购买操作。
 
@@ -70,6 +79,54 @@ class PurchaseEngine:
         self.device = device
         self.config = config
         self._ocr = OCR
+
+    # ------------------------------------------------------------------
+    # 弹窗 OCR 扫描（单次 OCR 检测所有按钮状态）
+    # ------------------------------------------------------------------
+
+    def _scan_popup(self, image) -> _PopupState:
+        """单次 OCR 扫描弹窗区域，检测所有按钮状态。
+
+        覆盖弹窗按钮区域和金币不足提示区域，
+        替代 _detect_confirm_popup + _detect_insufficient_gold 的多次 OCR。
+
+        Args:
+            image: 截图
+
+        Returns:
+            _PopupState 包含所有检测到的按钮。
+        """
+        scan_region = (
+            POPUP_REGION[0],
+            INSUFFICIENT_GOLD_REGION[1],
+            POPUP_REGION[2],
+            POPUP_REGION[3],
+        )
+        blocks = self._ocr.read(image, region=scan_region, min_confidence=0.4)
+
+        state = _PopupState()
+        for b in blocks:
+            cx = int(b.cx)
+            cy = int(b.cy)
+
+            # 金币不足 (y=280-400)
+            if ("不足" in b.text
+                    and INSUFFICIENT_GOLD_REGION[0] <= cx <= INSUFFICIENT_GOLD_REGION[2]
+                    and INSUFFICIENT_GOLD_REGION[1] <= cy <= INSUFFICIENT_GOLD_REGION[3]):
+                state.insufficient_gold = True
+            # 取消按钮 (y=440-550)
+            elif ("取消" in b.text
+                  and POPUP_CANCEL_REGION[0] <= cx <= POPUP_CANCEL_REGION[2]
+                  and POPUP_CANCEL_REGION[1] <= cy <= POPUP_CANCEL_REGION[3]):
+                state.has_cancel = True
+                state.cancel_pos = (cx, cy + BUTTON_CLICK_OFFSET_Y)
+            # 确认/购买按钮 (y=440-550)
+            elif (("购买" in b.text or "确认" in b.text)
+                  and POPUP_CONFIRM_REGION[0] <= cx <= POPUP_CONFIRM_REGION[2]
+                  and POPUP_CONFIRM_REGION[1] <= cy <= POPUP_CONFIRM_REGION[3]):
+                state.has_buy_or_confirm = True
+
+        return state
 
     def verify_confirm_position(self) -> None:
         """启动时校准确认按钮坐标。
@@ -144,28 +201,20 @@ class PurchaseEngine:
         return None
 
     def _detect_confirm_popup(self, image) -> bool:
-        """检测确认弹窗是否存在。
-
-        购买弹窗有"购买"（右侧）+"取消"（左侧）按钮。
-        刷新弹窗有"确认"（右侧）+"取消"（左侧）。
-        左右分区搜索，避免弹窗标题文字干扰。
+        """检测确认弹窗是否存在（使用 _scan_popup 单次 OCR）。
 
         Returns:
             bool: 弹窗是否存在
         """
-        has_cancel = self._find_popup_button(image, "取消", region=POPUP_CANCEL_REGION) is not None
-        has_buy = self._find_popup_button(image, "购买", region=POPUP_CONFIRM_REGION) is not None
-        has_confirm = self._find_popup_button(image, "确认", region=POPUP_CONFIRM_REGION) is not None
-        return has_cancel and (has_buy or has_confirm)
+        state = self._scan_popup(image)
+        return state.has_cancel and state.has_buy_or_confirm
 
     def _detect_insufficient_gold(self, image) -> bool:
-        """检测金币不足提示。"""
-        blocks = self._ocr.read(image, region=INSUFFICIENT_GOLD_REGION, min_confidence=0.4)
-        for block in blocks:
-            if "不足" in block.text:
-                logger.info(f"检测到金币不足提示: '{block.text}'")
-                return True
-        return False
+        """检测金币不足提示（使用 _scan_popup 单次 OCR）。"""
+        state = self._scan_popup(image)
+        if state.insufficient_gold:
+            logger.info("检测到金币不足提示")
+        return state.insufficient_gold
 
     def _click_popup_button(self, image, button_text: str) -> bool:
         """搜索并点击弹窗中的按钮文字。
@@ -228,8 +277,11 @@ class PurchaseEngine:
             if image is None:
                 continue
 
+            # 单次 OCR 扫描弹窗所有状态
+            popup = self._scan_popup(image)
+
             # 检查金币不足
-            if self._detect_insufficient_gold(image):
+            if popup.insufficient_gold:
                 reason = "金币不足"
                 logger.warning(f"购买失败 - {item.item_type}: {reason}")
                 self._close_popup(image)
@@ -241,14 +293,15 @@ class PurchaseEngine:
                 )
 
             # 检测并点击确认弹窗
-            if self._detect_confirm_popup(image):
+            if popup.has_cancel and popup.has_buy_or_confirm:
                 logger.info("检测到确认弹窗")
                 self._click_confirm_in_popup(image)
                 time.sleep(0.3)
 
-                # 检查二次确认
+                # 检查二次确认（复用 _scan_popup）
                 retry_img = self.device.screenshot()
-                if self._detect_confirm_popup(retry_img):
+                retry_popup = self._scan_popup(retry_img)
+                if retry_popup.has_cancel and retry_popup.has_buy_or_confirm:
                     logger.info("检测到二次确认弹窗")
                     self._click_confirm_in_popup(retry_img)
                     time.sleep(0.3)
@@ -256,7 +309,7 @@ class PurchaseEngine:
                 confirmed = True
                 break
 
-            time.sleep(0.3)
+            time.sleep(0.15)
 
         # 弹窗未出现 → 重试
         if not confirmed:
@@ -265,7 +318,8 @@ class PurchaseEngine:
             time.sleep(1.0)
             retry_img = self.device.screenshot()
 
-            if self._detect_confirm_popup(retry_img):
+            retry_popup = self._scan_popup(retry_img)
+            if retry_popup.has_cancel and retry_popup.has_buy_or_confirm:
                 logger.info("重试后检测到确认弹窗")
                 self._click_confirm_in_popup(retry_img)
                 confirmed = True
@@ -281,36 +335,36 @@ class PurchaseEngine:
             )
 
         # 3. 验证购买结果
-        time.sleep(1.0)
+        time.sleep(0.5)
         verify_img = self.device.screenshot()
 
         # 检查弹窗是否已关闭
-        if self._detect_confirm_popup(verify_img):
+        verify_popup = self._scan_popup(verify_img)
+        if verify_popup.has_cancel and verify_popup.has_buy_or_confirm:
             logger.warning(f"弹窗仍未关闭，重试确认: {item.item_type}")
-            retry_confirmed = False
             retry_timer = Timer(2.0)
             retry_timer.start()
             while not retry_timer.reached():
                 img = self.device.screenshot()
-                if self._detect_confirm_popup(img):
+                retry = self._scan_popup(img)
+                if retry.has_cancel and retry.has_buy_or_confirm:
                     self._click_confirm_in_popup(img)
                     time.sleep(0.3)
-                    retry_confirmed = True
                     break
-                time.sleep(0.3)
+                time.sleep(0.15)
 
-            if retry_confirmed:
-                time.sleep(1.0)
-                final_img = self.device.screenshot()
-                if self._detect_confirm_popup(final_img):
-                    reason = "弹窗确认后仍未关闭"
-                    logger.warning(f"购买失败 - {item.item_type}: {reason}")
-                    return PurchaseResult(
-                        item_type=item.item_type,
-                        price=item.price,
-                        success=False,
-                        reason=reason,
-                    )
+            time.sleep(0.5)
+            final_img = self.device.screenshot()
+            final_popup = self._scan_popup(final_img)
+            if final_popup.has_cancel and final_popup.has_buy_or_confirm:
+                reason = "弹窗确认后仍未关闭"
+                logger.warning(f"购买失败 - {item.item_type}: {reason}")
+                return PurchaseResult(
+                    item_type=item.item_type,
+                    price=item.price,
+                    success=False,
+                    reason=reason,
+                )
 
         logger.info(f"购买成功: {item.item_type}")
         return PurchaseResult(

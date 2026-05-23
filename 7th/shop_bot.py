@@ -39,14 +39,14 @@ GOLD_REGION = (450, 5, 970, 40)
 
 # 滑动翻页参数
 SCROLL_AREA = (800, 400, 800, 150)
-SCROLL_WAIT = 1.0  # 等待滑动动画结束
+SCROLL_WAIT = 0.5  # 等待滑动动画结束
 MAX_SCROLL_COUNT = 8
 
 # 刷新确认弹窗等待超时
 REFRESH_CONFIRM_TIMEOUT = 3.0
 REFRESH_MAX_RETRIES = 2
 REFRESH_CONFIRM_BTN_POS = (748, 460)
-SHELF_LOAD_WAIT = 1.0
+SHELF_LOAD_WAIT = 0.5
 SKYSTONE_PER_REFRESH = 3
 MAX_CONSECUTIVE_ERRORS = 3
 
@@ -454,7 +454,7 @@ class ShopBot:
                 start = (SCROLL_AREA[0], SCROLL_AREA[1])   # (640, 400)
                 end = (SCROLL_AREA[2], SCROLL_AREA[3])     # (640, 150)
                 self.device.swipe(start, end)
-                time.sleep(SCROLL_WAIT)  # 等待滑动动画结束
+                time.sleep(SCROLL_WAIT)
 
             # 截图一次，复用给场景校验和物品识别
             image = self.device.screenshot()

@@ -117,10 +117,13 @@ class TestBuyItem:
     @patch("shop.purchase.time.sleep")
     def test_successful_purchase(self, mock_sleep, engine, mock_device, sample_bookmark):
         """成功购买：OCR 检测弹窗 → 固定坐标确认"""
-        with patch.object(engine, "_detect_confirm_popup") as mock_detect, \
-             patch.object(engine, "_detect_insufficient_gold", return_value=False):
-            # 第一次截图没有弹窗，第二次检测到弹窗，第三次二次确认检测无，第四次验证弹窗已关闭
-            mock_detect.side_effect = [False, True, False, False]
+        from shop.purchase import _PopupState
+        no_popup = _PopupState()
+        popup = _PopupState(has_cancel=True, has_buy_or_confirm=True)
+
+        with patch.object(engine, "_scan_popup") as mock_scan:
+            # while loop → no popup → popup detected; retry check → no; verify → closed
+            mock_scan.side_effect = [no_popup, popup, no_popup, no_popup]
             result = engine.buy_item(sample_bookmark)
             assert result.success is True
             assert result.item_type == "bookmark"
@@ -128,9 +131,13 @@ class TestBuyItem:
     @patch("shop.purchase.time.sleep")
     def test_purchase_with_second_confirm(self, mock_sleep, engine, mock_device, sample_bookmark):
         """二次确认弹窗"""
-        with patch.object(engine, "_detect_confirm_popup") as mock_detect, \
-             patch.object(engine, "_detect_insufficient_gold", return_value=False):
-            mock_detect.side_effect = [True, True, False]  # 弹窗→二次弹窗→验证时弹窗已关闭
+        from shop.purchase import _PopupState
+        no_popup = _PopupState()
+        popup = _PopupState(has_cancel=True, has_buy_or_confirm=True)
+
+        with patch.object(engine, "_scan_popup") as mock_scan:
+            # while → popup; retry check → popup (second); verify → closed
+            mock_scan.side_effect = [popup, popup, no_popup]
             result = engine.buy_item(sample_bookmark)
             assert result.success is True
             assert mock_device.click_position.call_count >= 2
@@ -138,9 +145,11 @@ class TestBuyItem:
     @patch("shop.purchase.time.sleep")
     def test_insufficient_gold_skips(self, mock_sleep, engine, mock_device, sample_bookmark):
         """金币不足跳过"""
-        with patch.object(engine, "_detect_confirm_popup", return_value=False), \
-             patch.object(engine, "_detect_insufficient_gold", return_value=True), \
+        from shop.purchase import _PopupState
+
+        with patch.object(engine, "_scan_popup") as mock_scan, \
              patch.object(engine, "_close_popup"):
+            mock_scan.return_value = _PopupState(insufficient_gold=True)
             result = engine.buy_item(sample_bookmark)
             assert result.success is False
             assert "金币不足" in result.reason
@@ -148,8 +157,10 @@ class TestBuyItem:
     @patch("shop.purchase.time.sleep")
     def test_confirm_popup_not_appearing_retries(self, mock_sleep, engine, mock_device, sample_bookmark):
         """确认弹窗未出现时重试"""
-        with patch.object(engine, "_detect_confirm_popup", return_value=False), \
-             patch.object(engine, "_detect_insufficient_gold", return_value=False):
+        from shop.purchase import _PopupState
+
+        with patch.object(engine, "_scan_popup") as mock_scan:
+            mock_scan.return_value = _PopupState()
             result = engine.buy_item(sample_bookmark)
             assert result.success is False
             assert "弹窗未出现" in result.reason
