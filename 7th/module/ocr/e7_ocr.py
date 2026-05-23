@@ -11,7 +11,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 from log import logger
-from shop.ocr_engine import OcrEngine, TextBlock
+from tasks.secret_shop.ocr_engine import OcrEngine, TextBlock
 
 
 # 复用 RapidOCR 引擎单例

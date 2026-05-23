@@ -1,0 +1,104 @@
+{
+  "SecretShop": {
+    "ShopItems": {
+      "_info": {"name": "购买物品"},
+      "BuyBookmarks": {
+        "type": "checkbox",
+        "value": true,
+        "display": "购买书签"
+      },
+      "BuyMysticMedals": {
+        "type": "checkbox",
+        "value": true,
+        "display": "购买神秘奖章"
+      },
+      "BuyEquipment": {
+        "type": "checkbox",
+        "value": false,
+        "display": "购买装备"
+      },
+      "BuyFodder": {
+        "type": "checkbox",
+        "value": false,
+        "display": "购买狗粮"
+      }
+    },
+    "RefreshSettings": {
+      "_info": {"name": "刷新设置"},
+      "MaxRefreshCount": {
+        "type": "input",
+        "value": 200,
+        "display": "最大刷新次数"
+      },
+      "MaxSkystoneSpend": {
+        "type": "input",
+        "value": 0,
+        "display": "天空石消耗上限"
+      }
+    },
+    "Thresholds": {
+      "_info": {"name": "阈值设置"},
+      "GoldThreshold": {
+        "type": "input",
+        "value": 0,
+        "display": "金币阈值"
+      },
+      "SkystoneThreshold": {
+        "type": "input",
+        "value": 0,
+        "display": "天空石阈值"
+      }
+    },
+    "StopConditions": {
+      "_info": {"name": "停止条件"},
+      "MaxBookmarks": {
+        "type": "input",
+        "value": 0,
+        "display": "书签购买上限"
+      },
+      "MaxMysticMedals": {
+        "type": "input",
+        "value": 100,
+        "display": "神秘奖章购买上限"
+      }
+    }
+  },
+  "Device": {
+    "Connection": {
+      "_info": {"name": "连接"},
+      "Serial": {
+        "type": "input",
+        "value": "127.0.0.1:16384",
+        "display": "设备序列号"
+      },
+      "ScreenshotMethod": {
+        "type": "select",
+        "value": "auto",
+        "option": ["auto", "ADB", "ADB_nc", "uiautomator2"],
+        "display": "截图方式"
+      },
+      "ControlMethod": {
+        "type": "select",
+        "value": "auto",
+        "option": ["auto", "ADB", "uiautomator2"],
+        "display": "控制方式"
+      },
+      "OcrMethod": {
+        "type": "select",
+        "value": "rapidocr",
+        "option": ["rapidocr", "easyocr", "paddleocr"],
+        "display": "OCR 方式"
+      }
+    }
+  },
+  "Webui": {
+    "Server": {
+      "_info": {"name": "服务器"},
+      "WebuiPort": {
+        "type": "input",
+        "value": 8080,
+        "display": "WebUI 端口"
+      }
+    }
+  }
+}

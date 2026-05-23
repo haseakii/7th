@@ -5,14 +5,9 @@ SecretShopTask - 秘密商店自动刷新购买任务
 """
 
 import threading
-from typing import Optional
 
 from log import logger
 from module.base.base import ModuleBase
-from shop.navigator import ShopNavigator
-from shop.purchase import PurchaseEngine
-from shop.recognizer import ItemRecognizer
-from shop_bot import ShopBot, RunStatistics
 
 
 class SecretShopTask(ModuleBase):
@@ -25,7 +20,7 @@ class SecretShopTask(ModuleBase):
         super().__init__(config, device=device, task=task)
         self.config = config
         self.device = device
-        self.bot: Optional[ShopBot] = None
+        self.bot = None  # ShopBot 实例，延迟初始化
         self._running = False
         self._stop_event = threading.Event()
 
@@ -33,12 +28,10 @@ class SecretShopTask(ModuleBase):
         """任务入口 — 运行商店自动刷新购买。"""
         logger.hr("SecretShopTask Run", level=0)
 
-        # 用 E7Config 兼容 ConfigManager
-        from config_manager import ConfigManager
-        cfg_mgr = ConfigManager(config_path=self.config._config_path)
-        cfg_mgr.load()
+        # 延迟导入避免循环依赖：shop_bot → tasks.secret_shop → shop_bot
+        from shop_bot import ShopBot
 
-        self.bot = ShopBot(config=cfg_mgr)
+        self.bot = ShopBot(config=self.config)
         self.bot._stop_event = self._stop_event
 
         # 使用外部传入的 device（避免重复连接）
@@ -60,7 +53,9 @@ class SecretShopTask(ModuleBase):
         return self._running
 
     @property
-    def stats(self) -> RunStatistics:
+    def stats(self):
+        """返回运行统计。"""
         if self.bot:
             return self.bot.get_statistics()
+        from shop_bot import RunStatistics
         return RunStatistics()

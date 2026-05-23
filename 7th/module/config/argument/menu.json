@@ -1,0 +1,47 @@
+{
+  "SecretShop": {
+    "menu": "collapse",
+    "page": "setting",
+    "tasks": [
+      "SecretShop"
+    ]
+  },
+  "SecretShop.ShopItems": {
+    "menu": "group",
+    "page": "setting"
+  },
+  "SecretShop.RefreshSettings": {
+    "menu": "group",
+    "page": "setting"
+  },
+  "SecretShop.Thresholds": {
+    "menu": "group",
+    "page": "setting"
+  },
+  "SecretShop.StopConditions": {
+    "menu": "group",
+    "page": "setting"
+  },
+  "Device": {
+    "menu": "collapse",
+    "page": "setting",
+    "tasks": [
+      "Device"
+    ]
+  },
+  "Device.Connection": {
+    "menu": "group",
+    "page": "setting"
+  },
+  "Webui": {
+    "menu": "collapse",
+    "page": "setting",
+    "tasks": [
+      "Webui"
+    ]
+  },
+  "Webui.Server": {
+    "menu": "group",
+    "page": "setting"
+  }
+}

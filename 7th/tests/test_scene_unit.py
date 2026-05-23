@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
 
-from shop.scene import Scene
-from shop.scene_manager import SceneManager
+from tasks.secret_shop.scene import Scene
+from tasks.secret_shop.scene_manager import SceneManager
 
 
 def _img(mean_val, shape=(10, 10, 3)):
@@ -25,7 +25,7 @@ class TestSceneManagerBasics:
     def test_init_default_ocr(self):
         """不传 ocr 参数时使用默认 OCR 类。"""
         sm = SceneManager()
-        from shop.ocr_engine import OCR
+        from tasks.secret_shop.ocr_engine import OCR
         assert sm._ocr is OCR
 
     def test_ensure_returns_true_when_match(self):
@@ -87,7 +87,7 @@ class TestSceneManagerDetectPriority:
 class TestSceneManagerIsSecretShop:
     """_is_secret_shop 亮度分析"""
 
-    @patch("shop.scene_manager.crop")
+    @patch("tasks.secret_shop.scene_manager.crop")
     def test_typical(self, mock_crop):
         """nav_top 暗, nav_mid 亮, content 暗 → 秘密商店。"""
         mock_crop.side_effect = [
@@ -98,14 +98,14 @@ class TestSceneManagerIsSecretShop:
         sm = SceneManager(ocr=MagicMock())
         assert sm._is_secret_shop(_img(0)) is True
 
-    @patch("shop.scene_manager.crop")
+    @patch("tasks.secret_shop.scene_manager.crop")
     def test_nav_top_too_bright(self, mock_crop):
         """nav_top > 80 → 提前返回 False。"""
         mock_crop.side_effect = [_img(100)]
         sm = SceneManager(ocr=MagicMock())
         assert sm._is_secret_shop(_img(0)) is False
 
-    @patch("shop.scene_manager.crop")
+    @patch("tasks.secret_shop.scene_manager.crop")
     def test_nav_top_boundary(self, mock_crop):
         """nav_top == 80（边界值）— 不触发提前返回。"""
         mock_crop.side_effect = [
@@ -116,7 +116,7 @@ class TestSceneManagerIsSecretShop:
         sm = SceneManager(ocr=MagicMock())
         assert sm._is_secret_shop(_img(0)) is True
 
-    @patch("shop.scene_manager.crop")
+    @patch("tasks.secret_shop.scene_manager.crop")
     def test_nav_mid_dim(self, mock_crop):
         """nav_mid <= 100 → 不是秘密商店。"""
         mock_crop.side_effect = [
@@ -127,7 +127,7 @@ class TestSceneManagerIsSecretShop:
         sm = SceneManager(ocr=MagicMock())
         assert sm._is_secret_shop(_img(0)) is False
 
-    @patch("shop.scene_manager.crop")
+    @patch("tasks.secret_shop.scene_manager.crop")
     def test_content_too_bright(self, mock_crop):
         """content >= 100 → 不是秘密商店。"""
         mock_crop.side_effect = [
@@ -142,7 +142,7 @@ class TestSceneManagerIsSecretShop:
 class TestSceneManagerIsLobby:
     """_is_lobby 亮度分析"""
 
-    @patch("shop.scene_manager.crop")
+    @patch("tasks.secret_shop.scene_manager.crop")
     def test_typical(self, mock_crop):
         """nav_top 亮, content 亮 → 大厅。"""
         mock_crop.side_effect = [
@@ -152,7 +152,7 @@ class TestSceneManagerIsLobby:
         sm = SceneManager(ocr=MagicMock())
         assert sm._is_lobby(_img(0)) is True
 
-    @patch("shop.scene_manager.crop")
+    @patch("tasks.secret_shop.scene_manager.crop")
     def test_dark_nav(self, mock_crop):
         """导航栏暗 → 不是大厅。"""
         mock_crop.side_effect = [
@@ -162,7 +162,7 @@ class TestSceneManagerIsLobby:
         sm = SceneManager(ocr=MagicMock())
         assert sm._is_lobby(_img(0)) is False
 
-    @patch("shop.scene_manager.crop")
+    @patch("tasks.secret_shop.scene_manager.crop")
     def test_dark_content(self, mock_crop):
         """内容区暗 → 不是大厅。"""
         mock_crop.side_effect = [
@@ -172,7 +172,7 @@ class TestSceneManagerIsLobby:
         sm = SceneManager(ocr=MagicMock())
         assert sm._is_lobby(_img(0)) is False
 
-    @patch("shop.scene_manager.crop")
+    @patch("tasks.secret_shop.scene_manager.crop")
     def test_boundary_nav(self, mock_crop):
         """nav_top == 100（边界值）— nav_top 不满足 > 100。"""
         mock_crop.side_effect = [
@@ -221,7 +221,7 @@ class TestSceneManagerIsPurchasePopup:
 
     def test_uses_cancel_region(self):
         """验证 OCR 调用时使用了正确的弹窗取消区域。"""
-        from shop.purchase import POPUP_CANCEL_REGION
+        from tasks.secret_shop.purchase import POPUP_CANCEL_REGION
         sm = SceneManager(ocr=MagicMock())
         sm._ocr.read.return_value = []
         sm._is_purchase_popup(_img(0))

@@ -34,15 +34,31 @@ def main():
 
 def _run_alas(config_path: str) -> None:
     """使用 ALAS 框架模式运行。"""
+    from pathlib import Path
     from alas import E7AutoScript
     logger.info("启动 ALAS 框架模式...")
-    alas = E7AutoScript(config_name=config_path)
+    # config_path 用于触发旧 YAML 迁移，config_name 用于 JSON 配置名
+    config_name = Path(config_path).stem if config_path else "default"
+    alas = E7AutoScript(config_name=config_name, config_path=config_path)
     if alas.init():
         alas.run_secret_shop()
 
 
 def _run_webui(config_path: str) -> None:
-    """启动 Web UI 界面。"""
+    """启动 Web UI 界面（新版 ALAS 风格，降级到旧版）。"""
+    try:
+        # 先尝试启动新版 ALAS 风格 WebUI
+        logger.info("启动 ALAS 风格 WebUI...")
+        from gui import run as run_alas_webui
+        run_alas_webui()
+        return
+    except ImportError:
+        logger.info("ALAS WebUI 不可用，尝试旧版 WebUI")
+    except Exception as e:
+        logger.warning(f"ALAS WebUI 启动失败: {e}")
+
+    # 降级：旧版 WebUI
+    logger.info("启动旧版 WebUI...")
     from config_manager import ConfigManager
     from shop_bot import ShopBot
 
@@ -55,7 +71,7 @@ def _run_webui(config_path: str) -> None:
         gui = ShopBotGUI(config, bot)
         gui.start_server(port=config.get().webui_port)
     except Exception as e:
-        logger.warning(f"Web UI 启动失败: {e}")
+        logger.warning(f"旧版 Web UI 也启动失败: {e}")
         # 降级为无 UI 模式
         _run_headless(config_path)
 

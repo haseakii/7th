@@ -9,7 +9,7 @@ import time
 from typing import Dict, List, Optional, Type
 
 from log import logger
-from shop.ocr_backends.base import BaseOcrBackend
+from tasks.secret_shop.ocr_backends.base import BaseOcrBackend
 
 
 # ── 注册中心 ──────────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ def available_methods() -> List[str]:
 
 
 # ── 导入具体后端触发注册 ──────────────────────────────────────────────────────
-from shop.ocr_backends.backends import (  # noqa: F401,E402
+from tasks.secret_shop.ocr_backends.backends import (  # noqa: F401,E402
     RapidOcrBackend,
     EasyOcrBackend,
     PaddleOcrBackend,

@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from shop.purchase import (
+from tasks.secret_shop.purchase import (
     PurchaseEngine,
     PurchaseResult,
     CONFIRM_BTN_POS,
@@ -21,7 +21,7 @@ from shop.purchase import (
     PURCHASE_INTERVAL_MIN,
     PURCHASE_INTERVAL_MAX,
 )
-from shop.recognizer import ShopItem
+from tasks.secret_shop.recognizer import ShopItem
 
 
 @pytest.fixture
@@ -101,23 +101,23 @@ class TestShouldBuy:
         unknown = ShopItem("unknown", "gold", 50000, 3, (120, 460, 200, 540), 0.30)
         assert engine.should_buy(unknown) is False
 
-    def test_buy_when_all_disabled(self, engine, mock_config, sample_bookmark):
-        mock_config.get_buy_list.return_value = {
+    def test_buy_when_all_disabled(self, mock_device, sample_bookmark):
+        engine = PurchaseEngine(mock_device, buy_list={
             "bookmarks": False,
             "mystic_medals": False,
             "equipment": False,
             "fodder": False,
-        }
+        })
         assert engine.should_buy(sample_bookmark) is False
 
 
 class TestBuyItem:
     """购买流程测试 (新版 OCR 检测)"""
 
-    @patch("shop.purchase.time.sleep")
+    @patch("tasks.secret_shop.purchase.time.sleep")
     def test_successful_purchase(self, mock_sleep, engine, mock_device, sample_bookmark):
         """成功购买：OCR 检测弹窗 → 固定坐标确认"""
-        from shop.purchase import _PopupState
+        from tasks.secret_shop.purchase import _PopupState
         no_popup = _PopupState()
         popup = _PopupState(has_cancel=True, has_buy_or_confirm=True)
 
@@ -128,10 +128,10 @@ class TestBuyItem:
             assert result.success is True
             assert result.item_type == "bookmark"
 
-    @patch("shop.purchase.time.sleep")
+    @patch("tasks.secret_shop.purchase.time.sleep")
     def test_purchase_with_second_confirm(self, mock_sleep, engine, mock_device, sample_bookmark):
         """二次确认弹窗"""
-        from shop.purchase import _PopupState
+        from tasks.secret_shop.purchase import _PopupState
         no_popup = _PopupState()
         popup = _PopupState(has_cancel=True, has_buy_or_confirm=True)
 
@@ -142,10 +142,10 @@ class TestBuyItem:
             assert result.success is True
             assert mock_device.click_position.call_count >= 2
 
-    @patch("shop.purchase.time.sleep")
+    @patch("tasks.secret_shop.purchase.time.sleep")
     def test_insufficient_gold_skips(self, mock_sleep, engine, mock_device, sample_bookmark):
         """金币不足跳过"""
-        from shop.purchase import _PopupState
+        from tasks.secret_shop.purchase import _PopupState
 
         with patch.object(engine, "_scan_popup") as mock_scan, \
              patch.object(engine, "_close_popup"):
@@ -154,10 +154,10 @@ class TestBuyItem:
             assert result.success is False
             assert "金币不足" in result.reason
 
-    @patch("shop.purchase.time.sleep")
+    @patch("tasks.secret_shop.purchase.time.sleep")
     def test_confirm_popup_not_appearing_retries(self, mock_sleep, engine, mock_device, sample_bookmark):
         """确认弹窗未出现时重试"""
-        from shop.purchase import _PopupState
+        from tasks.secret_shop.purchase import _PopupState
 
         with patch.object(engine, "_scan_popup") as mock_scan:
             mock_scan.return_value = _PopupState()
@@ -169,8 +169,8 @@ class TestBuyItem:
 class TestProcessShelf:
     """货架处理测试"""
 
-    @patch("shop.purchase.time.sleep")
-    @patch("shop.purchase.random.uniform", return_value=0.75)
+    @patch("tasks.secret_shop.purchase.time.sleep")
+    @patch("tasks.secret_shop.purchase.random.uniform", return_value=0.75)
     def test_process_buys_matching_items(self, mock_uniform, mock_sleep, engine, sample_bookmark):
         with patch.object(engine, "buy_item") as mock_buy:
             mock_buy.return_value = PurchaseResult("bookmark", 184000, True)
@@ -178,16 +178,16 @@ class TestProcessShelf:
             assert len(results) == 1
             assert results[0].item_type == "bookmark"
 
-    @patch("shop.purchase.time.sleep")
-    @patch("shop.purchase.random.uniform", return_value=0.75)
+    @patch("tasks.secret_shop.purchase.time.sleep")
+    @patch("tasks.secret_shop.purchase.random.uniform", return_value=0.75)
     def test_purchase_interval(self, mock_uniform, mock_sleep, engine, sample_bookmark, sample_mystic):
         with patch.object(engine, "buy_item") as mock_buy:
             mock_buy.return_value = PurchaseResult("bookmark", 184000, True)
             engine.process_shelf([sample_bookmark, sample_mystic])
             mock_uniform.assert_called_with(PURCHASE_INTERVAL_MIN, PURCHASE_INTERVAL_MAX)
 
-    @patch("shop.purchase.time.sleep")
-    @patch("shop.purchase.random.uniform", return_value=0.75)
+    @patch("tasks.secret_shop.purchase.time.sleep")
+    @patch("tasks.secret_shop.purchase.random.uniform", return_value=0.75)
     def test_process_empty_shelf(self, mock_uniform, mock_sleep, engine):
         results = engine.process_shelf([])
         assert results == []

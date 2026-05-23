@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from shop.navigator import (
+from tasks.secret_shop.navigator import (
     ShopNavigator,
     LOBBY_BTN,
     SECRET_SHOP_ENTRANCE_BTN,
@@ -171,7 +171,7 @@ class TestNavigateToSecretShop:
             assert navigator.navigate_to_secret_shop() is True
         mock_device.click.assert_not_called()
 
-    @patch("shop.navigator.time.sleep")
+    @patch("tasks.secret_shop.navigator.time.sleep")
     def test_navigate_from_lobby(self, mock_sleep, navigator, mock_device):
         """需求 3.2: 从大厅点击秘密商店入口按钮"""
         scenes = iter(["lobby", "secret_shop"])
@@ -180,7 +180,7 @@ class TestNavigateToSecretShop:
             assert result is True
             mock_device.click.assert_called_once_with(SECRET_SHOP_ENTRANCE_BTN)
 
-    @patch("shop.navigator.time.sleep")
+    @patch("tasks.secret_shop.navigator.time.sleep")
     def test_navigation_timeout(self, mock_sleep, navigator, mock_device):
         """需求 3.5: 导航超时返回 False"""
         with patch.object(navigator, "detect_current_scene", return_value="unknown"), \
@@ -188,7 +188,7 @@ class TestNavigateToSecretShop:
             result = navigator.navigate_to_secret_shop(timeout=0.01)
             assert result is False
 
-    @patch("shop.navigator.time.sleep")
+    @patch("tasks.secret_shop.navigator.time.sleep")
     def test_popup_handling_during_navigation(self, mock_sleep, navigator, mock_device):
         """需求 3.4: 导航中遇到弹窗时关闭并继续"""
         call_count = 0

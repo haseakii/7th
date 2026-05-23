@@ -1,0 +1,290 @@
+/* ── E7 Shop Bot Dark Theme ─────────────────────────────── */
+/* Based on ALAS dark theme, adapted for E7 */
+
+/* === Reset === */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    background: #1e1e2e;
+    color: #cdd6f4;
+}
+footer, .pywebio-footer { display: none !important; }
+#output-container, .webio-outputarea {
+    max-width: 100% !important;
+    padding: 0 !important;
+}
+.pywebio { padding: 0; min-height: unset; }
+
+/* === Root grid === */
+#pywebio-scope-ROOT {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* === Header === */
+#pywebio-scope-header {
+    display: flex;
+    align-items: center;
+    height: 48px;
+    min-height: 48px;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+    padding: 0 16px;
+    gap: 8px;
+}
+#pywebio-scope-header .icon { color: #89b4fa; }
+#pywebio-scope-header .--header-icon-- { font-size: 20px; }
+#pywebio-scope-header .--header-text-- {
+    font-size: 16px;
+    font-weight: 600;
+    color: #cdd6f4;
+}
+#pywebio-scope-header_status { margin-left: auto; }
+#pywebio-scope-header_title { font-size: 14px; color: #a6adc8; }
+
+/* === Contents (aside + menu + content) === */
+#pywebio-scope-contents {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* === Aside === */
+#pywebio-scope-aside {
+    width: 200px;
+    min-width: 200px;
+    background: #181825;
+    border-right: 1px solid #313244;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+#pywebio-scope-aside .aside-title {
+    padding: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #a6adc8;
+    border-bottom: 1px solid #313244;
+}
+#pywebio-scope-aside .btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: #a6adc8;
+    padding: 10px 20px;
+    font-size: 14px;
+    transition: all 0.15s;
+}
+#pywebio-scope-aside .btn:hover { background: #313244; color: #cdd6f4; }
+#pywebio-scope-aside .btn.btn-aside-active {
+    background: #313244;
+    color: #89b4fa;
+    font-weight: bold;
+    border-left: 3px solid #89b4fa;
+}
+
+/* === Menu === */
+#pywebio-scope-menu {
+    width: 220px;
+    min-width: 220px;
+    background: #1e1e2e;
+    border-right: 1px solid #313244;
+    overflow-y: auto;
+    transition: all 0.3s;
+}
+#pywebio-scope-menu .btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: #a6adc8;
+    padding: 8px 16px;
+    font-size: 13px;
+    transition: all 0.15s;
+}
+#pywebio-scope-menu .btn:hover { background: #313244; color: #cdd6f4; }
+#pywebio-scope-menu .btn.btn-menu-active {
+    background: #313244;
+    color: #89b4fa;
+    font-weight: bold;
+}
+
+/* === Content === */
+#pywebio-scope-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+    background: #1e1e2e;
+    color: #cdd6f4;
+}
+
+/* === Group divider === */
+.hr-task-group-box {
+    display: flex;
+    align-items: center;
+    margin: 16px 0 8px;
+}
+.hr-task-group-line {
+    flex: 1;
+    height: 1px;
+    background: #313244;
+}
+.hr-task-group-text {
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6c7086;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* === Form controls === */
+.form-control {
+    background: #313244;
+    border: 1px solid #45475a;
+    color: #cdd6f4;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 14px;
+    width: 100%;
+    margin: 4px 0;
+}
+.form-control:focus {
+    border-color: #89b4fa;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.3);
+}
+select.form-control { cursor: pointer; }
+label { color: #a6adc8; font-size: 13px; font-weight: 500; }
+
+/* === Overview === */
+.overview-container {
+    text-align: center;
+    padding: 40px 0;
+}
+.overview-container h1 { margin: 0; font-size: 28px; color: #cdd6f4; }
+.overview-container p { color: #a6adc8; margin: 8px 0 0; }
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+}
+.status-card {
+    background: #181825;
+    border: 1px solid #313244;
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+}
+.status-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #89b4fa;
+}
+.status-label {
+    font-size: 13px;
+    color: #6c7086;
+    margin-top: 4px;
+}
+
+/* === Buttons === */
+.btn-success {
+    background: #a6e3a1;
+    color: #1e1e2e;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-danger {
+    background: #f38ba8;
+    color: #1e1e2e;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-success:hover { background: #94d89a; }
+.btn-danger:hover { background: #e47e9a; }
+
+/* === Collapse === */
+.collapse-title {
+    background: transparent;
+    color: #a6adc8;
+    border: none;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.collapse-title:hover { color: #cdd6f4; }
+.collapse-content { padding-left: 8px; }
+
+/* === Form actions (save/reset buttons) === */
+#pywebio-scope-form_actions {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #313244;
+}
+
+/* === Log container (plain div, not a PyWebIO scope) === */
+.log-container {
+    background: #11111b;
+    border-radius: 8px;
+    padding: 8px 12px;
+    height: 350px;
+    max-height: 350px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    font-family: Menlo, Consolas, "Courier New", monospace;
+    font-size: 12px;
+    color: #cdd6f4;
+    margin-top: 8px;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+.log-container .ll {
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+}
+
+/* === Scheduler bar === */
+#pywebio-scope-scheduler_bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+/* === btn-warning === */
+.btn-warning {
+    background: #f9e2af;
+    color: #1e1e2e;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-warning:hover { background: #e5d09a; }
+
+/* === Scrollbar === */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #585b70; }

@@ -5,6 +5,8 @@ ShopBot 主控类 - 协调所有模块执行自动购买循环
 按钮检测使用 OCR 替代固定坐标+颜色方案，更鲁棒。
 """
 
+import gc
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -12,16 +14,18 @@ from typing import List, Optional
 
 import numpy as np
 
-from config_manager import ConfigManager
+from types import SimpleNamespace
+from typing import Dict, Union
+
 from log import logger
 from module.base.timer import Timer
 from module.device.device import DeviceController
-from shop.navigator import ShopNavigator
-from shop.ocr_engine import OCR
-from shop.purchase import PurchaseEngine, PurchaseResult, CONFIRM_BTN_POS, CANCEL_BTN_POS, POPUP_CANCEL_REGION, POPUP_CONFIRM_REGION, CONFIRM_POPUP_TIMEOUT
-from shop.recognizer import ItemRecognizer
-from shop.scene import Scene
-from shop.scene_manager import SceneManager
+from tasks.secret_shop.navigator import ShopNavigator
+from tasks.secret_shop.ocr_engine import OCR
+from tasks.secret_shop.purchase import PurchaseEngine, PurchaseResult, CONFIRM_BTN_POS, CANCEL_BTN_POS, POPUP_CANCEL_REGION, POPUP_CONFIRM_REGION, CONFIRM_POPUP_TIMEOUT
+from tasks.secret_shop.recognizer import ItemRecognizer
+from tasks.secret_shop.scene import Scene
+from tasks.secret_shop.scene_manager import SceneManager
 
 # ---------------------------------------------------------------------------
 # 常量
@@ -64,13 +68,76 @@ class RunStatistics:
 
 
 class ShopBot:
-    def __init__(self, config: ConfigManager, device: DeviceController = None):
-        self.config = config
-        cfg = config.get()
+    """商店自动刷新购买主控类。
+
+    接受 ConfigManager、E7Config 或 AppConfig 兼容对象作为配置。
+    内部统一为 _cfg 对象，暴露 device / shop 两级属性（兼容旧风格）。
+    """
+
+    @staticmethod
+    def _normalize_config(config) -> SimpleNamespace:
+        """统一不同配置类型为 _(cfg).device / .shop 访问方式。"""
+        # 已经是 SimpleNamespace/AppConfig 风格的对象（非空，防止误配 E7Config 默认属性）
+        if hasattr(config, 'device') and hasattr(config, 'shop') and config.device is not None and config.shop is not None:
+            return config
+
+        # E7Config → 映射为 SimpleNamespace（必须在 ConfigManager 之前，
+        # 因为 E7Config 也继承 .get() 但需要 key 参数）
+        if hasattr(config, 'BuyBookmarks'):
+            from module.config.config import E7Config
+            if isinstance(config, E7Config):
+                return SimpleNamespace(
+                    device=SimpleNamespace(
+                        serial=config.serial,
+                        screenshot_method=config.screenshot_method,
+                        control_method=config.control_method,
+                        ocr_method=getattr(config, 'OcrMethod', 'rapidocr'),
+                    ),
+                    shop=SimpleNamespace(
+                        buy_bookmarks=config.BuyBookmarks,
+                        buy_mystic_medals=config.BuyMysticMedals,
+                        buy_equipment=config.BuyEquipment,
+                        buy_fodder=config.BuyFodder,
+                        max_refresh_count=config.MaxRefreshCount,
+                        gold_threshold=config.GoldThreshold,
+                        skystone_threshold=config.SkystoneThreshold,
+                        max_bookmarks=config.MaxBookmarks,
+                        max_mystic_medals=config.MaxMysticMedals,
+                        max_skystone_spend=config.MaxSkystoneSpend,
+                    ),
+                )
+
+        # ConfigManager → .get() 返回 AppConfig
+        if hasattr(config, 'get') and callable(config.get):
+            cfg = config.get()
+            if hasattr(cfg, 'device') and hasattr(cfg, 'shop'):
+                return cfg
+
+        # fallback: 裸 dict
+        return config
+
+    @staticmethod
+    def _extract_buy_list(cfg) -> Dict[str, bool]:
+        """从 _cfg 提取 buy_list。"""
+        shop = cfg.shop if hasattr(cfg, 'shop') else cfg
+        return {
+            'bookmarks': getattr(shop, 'buy_bookmarks', True),
+            'mystic_medals': getattr(shop, 'buy_mystic_medals', True),
+            'equipment': getattr(shop, 'buy_equipment', False),
+            'fodder': getattr(shop, 'buy_fodder', False),
+        }
+
+    def __init__(self, config, device: DeviceController = None):
+        self._raw_config = config
+        self._cfg = self._normalize_config(config)
+        cfg = self._cfg
         self.device = device or DeviceController(cfg.device)
         self.navigator = ShopNavigator(self.device)
         self.recognizer = ItemRecognizer(self.device)
-        self.purchase_engine = PurchaseEngine(self.device, config)
+        self.purchase_engine = PurchaseEngine(
+            self.device,
+            buy_list=self._extract_buy_list(cfg),
+        )
         self.stats = RunStatistics()
         self._running = False
         self._stop_event = threading.Event()
@@ -80,6 +147,11 @@ class ShopBot:
         self._refresh_btn_pos = None  # 校准后缓存刷新按钮位置
         self._skystone_known = False  # 首次 OCR 是否成功读到天空石
         self._skystone_check_counter = 99  # 首次检查强制 OCR
+
+    # 保留 .config 属性访问（部分外部代码可能直接使用）
+    @property
+    def config(self):
+        return self._raw_config
 
     def start(self) -> None:
         if self._running:
@@ -303,7 +375,7 @@ class ShopBot:
     def run_loop(self) -> None:
         consecutive_errors = 0
         try:
-            if not self.device.connect():
+            if not self.device.connect(stop_event=self._stop_event):
                 logger.error("设备连接失败，终止运行")
                 return
             if not self.navigator.navigate_to_secret_shop():
@@ -333,7 +405,7 @@ class ShopBot:
                     if not self.check_resources():
                         logger.info("资源不足，停止刷新")
                         break
-                    cfg = self.config.get()
+                    cfg = self._cfg
                     if not self.should_continue(
                         self.stats.skystone_remaining,
                         cfg.shop.skystone_threshold,
@@ -355,6 +427,21 @@ class ShopBot:
                     self.stats.skystone_spent += SKYSTONE_PER_REFRESH
                     self.stats.skystone_remaining -= SKYSTONE_PER_REFRESH
                     self._skystone_check_counter += 1
+
+                    # 每 50 轮强制 GC，清理 OCR/OpenCV 中间缓冲
+                    if self.stats.total_refreshes % 50 == 0:
+                        gc.collect()
+
+                    # 每 100 轮记录内存用量
+                    if self.stats.total_refreshes % 100 == 0:
+                        try:
+                            import psutil
+                            proc = psutil.Process(os.getpid())
+                            mem = proc.memory_info()
+                            logger.info(f"内存: RSS={mem.rss // 1024 // 1024}MB, VMS={mem.vms // 1024 // 1024}MB")
+                        except Exception:
+                            pass
+
                     consecutive_errors = 0
                 except Exception as e:
                     consecutive_errors += 1
@@ -526,7 +613,18 @@ class ShopBot:
 
                 # 图像底部检测（比 OCR 快得多，~5ms vs ~300ms）
                 if prev_shelf_image is not None and self._shelf_is_at_bottom(prev_shelf_image, image):
-                    logger.info(f"已到达货架底部（第 {scroll_count} 次滑动，图像相似度检测）")
+                    logger.info(f"接近货架底部（第 {scroll_count} 次滑动，图像相似度检测）")
+                    # 到底前再识别一次，避免漏掉底部新出现的物品
+                    items = self.recognizer.recognize_visible_items(image)
+                    if items:
+                        curr_keys = {(it.item_type, it.name_text.strip() if it.name_text else "", round(it.position[1] / 20))
+                                     for it in items}
+                        if curr_keys != prev_item_keys:
+                            logger.info(f"到底前识别到 {len(items)} 个物品，尝试购买")
+                            results = self.purchase_engine.process_shelf(items)
+                            all_results.extend(results)
+                            if results:
+                                time.sleep(0.3)
                     break
             else:
                 image = self.device.screenshot()
@@ -553,6 +651,10 @@ class ShopBot:
             all_results.extend(results)
             logger.info(f"第 {scroll_count} 次查看，购买 {len(results)} 个物品")
 
+            # 购买后等屏幕稳定再滚动，防止弹窗残留导致漏识别
+            if results:
+                time.sleep(0.3)
+
             # 保存本轮截图（购买前的快照）用于下次底部检测
             prev_shelf_image = image
 
@@ -564,7 +666,7 @@ class ShopBot:
 
     def check_resources(self) -> bool:
         """检查天空石是否足够（每 10 轮 OCR 一次，中间用推算值）。"""
-        cfg = self.config.get()
+        cfg = self._cfg
         if cfg.shop.skystone_threshold <= 0:
             return True
 

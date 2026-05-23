@@ -24,6 +24,9 @@ config.yaml
 adb/
 platform-tools/
 
+# ALAS reference code (do not commit)
+AzurLaneAutoScript/
+
 # OS
 Thumbs.db
 .DS_Store

@@ -8,8 +8,8 @@ import cv2
 import numpy as np
 
 from log import logger
-from shop.ocr_backends.base import BaseOcrBackend, OcrRawResult
-from shop.ocr_backends import register
+from tasks.secret_shop.ocr_backends.base import BaseOcrBackend, OcrRawResult
+from tasks.secret_shop.ocr_backends import register
 
 
 @register("rapidocr")
@@ -22,7 +22,15 @@ class RapidOcrBackend(BaseOcrBackend):
     def initialize(self) -> float:
         from rapidocr import RapidOCR
         t0 = time.perf_counter()
-        self._reader = RapidOCR()
+        # ONNX Runtime 内存优化：
+        # - intra_op_num_threads=2: 限制线程工作缓冲区
+        # - enable_cpu_mem_arena: 启用内存池减少碎片化
+        params = {
+            "EngineConfig.onnxruntime.intra_op_num_threads": 2,
+            "EngineConfig.onnxruntime.enable_cpu_mem_arena": True,
+            "EngineConfig.onnxruntime.cpu_ep_cfg.arena_extend_strategy": "kSameAsRequested",
+        }
+        self._reader = RapidOCR(params=params)
         return time.perf_counter() - t0
 
     @property

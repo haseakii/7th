@@ -22,8 +22,8 @@ import hypothesis.strategies as st
 from hypothesis import given, settings
 
 from config_manager import ConfigManager, ShopConfig
-from shop.purchase import ITEM_TYPE_TO_CONFIG_KEY, PurchaseEngine
-from shop.recognizer import ShopItem
+from tasks.secret_shop.purchase import ITEM_TYPE_TO_CONFIG_KEY, PurchaseEngine
+from tasks.secret_shop.recognizer import ShopItem
 
 # ---------------------------------------------------------------------------
 # 策略定义

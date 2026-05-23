@@ -20,7 +20,7 @@ from shop_bot import (
     REFRESH_CONFIRM_BTN_POS,
     SKYSTONE_REGION,
 )
-from shop.purchase import PurchaseResult
+from tasks.secret_shop.purchase import PurchaseResult
 
 
 @pytest.fixture

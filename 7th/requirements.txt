@@ -3,3 +3,18 @@ paddleocr==3.4.0
 pytest==9.0.2
 uiautomator2==3.5.0
 zerorpc==0.6.3
+
+# WebUI
+pywebio>=1.8.0
+tornado>=6.4
+uvicorn[standard]>=0.29
+fastapi>=0.110
+
+# 配置/部署
+PyYAML>=6.0
+
+# 可选：文件变更监听
+watchdog>=4.0
+
+# 可选：Git 更新操作
+gitpython>=3.1

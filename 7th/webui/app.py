@@ -454,7 +454,7 @@ class ShopBotGUI:
                 def _so(val):
                     if not self.bot.alive:
                         self.config.update("device", "ocr_method", str(val))
-                        from shop.ocr_engine import OCR
+                        from tasks.secret_shop.ocr_engine import OCR
                         OCR.set_backend(str(val))
                 pin_on_change("device_serial", onchange=_s)
                 pin_on_change("device_screenshot_method", onchange=_ss)

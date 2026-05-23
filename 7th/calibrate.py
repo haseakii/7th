@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config_manager import ConfigManager, AppConfig
 from log import logger
-from shop.navigator import ShopNavigator
+from tasks.secret_shop.navigator import ShopNavigator
 from module.device.device import DeviceController
 
 

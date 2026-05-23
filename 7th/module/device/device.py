@@ -7,6 +7,7 @@ DeviceController 设备控制器
 
 import os
 import subprocess
+import threading
 import time
 from typing import Optional, Tuple
 
@@ -27,7 +28,9 @@ class DeviceController:
 
     def __init__(self, config):
         """支持 E7Config 和 DeviceConfig 两种配置对象。"""
-        self.serial: str = getattr(config, 'serial', None) or getattr(config, 'device_serial', '127.0.0.1:16384')
+        # 处理 serial 为 None / "None" 的情况
+        raw = getattr(config, 'serial', None) or getattr(config, 'device_serial', None)
+        self.serial = raw if raw and str(raw) != 'None' else '127.0.0.1:16384'
         self.screenshot_method: str = getattr(config, 'screenshot_method', None) or getattr(config, 'device_screenshot_method', 'ADB')
         self.control_method: str = getattr(config, 'control_method', None) or getattr(config, 'device_control_method', 'ADB')
         self.image: Optional[np.ndarray] = None
@@ -58,24 +61,30 @@ class DeviceController:
 
     # ── ADB 连接 ────────────────────────────────────────────────────────────
 
-    def connect(self, max_retries: int = 3, retry_delay: float = 5.0) -> bool:
+    def connect(self, max_retries: int = 3, retry_delay: float = 5.0,
+                stop_event: threading.Event = None) -> bool:
         """连接 ADB 设备，失败重试。
 
         Args:
             max_retries: 最大重试次数，默认 3 次
             retry_delay: 重试间隔秒数，默认 5.0 秒
+            stop_event: 可选停止事件，设置时中断重试循环
 
         Returns:
             bool: 连接是否成功
         """
         for attempt in range(1, max_retries + 1):
+            if stop_event and stop_event.is_set():
+                logger.info("连接过程中收到停止信号，中断连接")
+                return False
+
             try:
                 logger.info(f"正在连接设备 {self.serial}（第 {attempt}/{max_retries} 次）")
                 result = subprocess.run(
                 [ADB_EXECUTABLE, "connect", self.serial],
-                    capture_output=True, text=True, timeout=10
+                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10
                 )
-                output = result.stdout.strip()
+                output = (result.stdout or '').strip()
 
                 if "connected" in output or "already" in output:
                     logger.info(f"设备连接成功: {self.serial}")

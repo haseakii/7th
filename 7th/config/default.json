@@ -1,0 +1,35 @@
+{
+  "SecretShop": {
+    "ShopItems": {
+      "BuyBookmarks": true,
+      "BuyMysticMedals": true,
+      "BuyEquipment": false,
+      "BuyFodder": false
+    },
+    "RefreshSettings": {
+      "MaxRefreshCount": 1000,
+      "MaxSkystoneSpend": 3000
+    },
+    "Thresholds": {
+      "GoldThreshold": 0,
+      "SkystoneThreshold": 0
+    },
+    "StopConditions": {
+      "MaxBookmarks": 0,
+      "MaxMysticMedals": 0
+    }
+  },
+  "Device": {
+    "Connection": {
+      "Serial": "127.0.0.1:16384",
+      "ScreenshotMethod": "auto",
+      "ControlMethod": "auto",
+      "OcrMethod": "rapidocr"
+    }
+  },
+  "Webui": {
+    "Server": {
+      "WebuiPort": 8080
+    }
+  }
+}

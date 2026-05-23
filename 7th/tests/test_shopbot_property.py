@@ -95,7 +95,7 @@ def test_should_continue_stop_condition_correctness(
 **Validates: Requirements 7.2**
 """
 
-from shop.purchase import PurchaseResult as _PurchaseResult  # noqa: E402
+from tasks.secret_shop.purchase import PurchaseResult as _PurchaseResult  # noqa: E402
 
 # Strategies for generating random PurchaseResult sequences
 _item_types = st.sampled_from(["bookmark", "mystic_medal", "equipment", "fodder", "unknown"])
@@ -164,7 +164,7 @@ def test_update_statistics_correctness(results):
 import threading  # noqa: E402
 import time as _time  # noqa: E402
 
-from shop.recognizer import ShopItem  # noqa: E402
+from tasks.secret_shop.recognizer import ShopItem  # noqa: E402
 
 
 def _make_shop_items(n: int):

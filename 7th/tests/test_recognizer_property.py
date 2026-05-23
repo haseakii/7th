@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import hypothesis.strategies as st
 from hypothesis import given, settings
 
-from shop.recognizer import ShopItem, VALID_ITEM_TYPES
+from tasks.secret_shop.recognizer import ShopItem, VALID_ITEM_TYPES
 
 # --- 策略定义 ---
 

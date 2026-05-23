@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from shop.recognizer import (
+from tasks.secret_shop.recognizer import (
     ShopItem,
     ItemRecognizer,
     VALID_ITEM_TYPES,
@@ -18,7 +18,7 @@ from shop.recognizer import (
     MAX_SCROLL_COUNT,
     ROW_SCAN_X2,
 )
-from shop.ocr_engine import TextBlock
+from tasks.secret_shop.ocr_engine import TextBlock
 
 
 @pytest.fixture

@@ -13,12 +13,14 @@ a = Analysis(
     pathex=[ROOT],
     binaries=[],
     datas=[
-        # 打包 assets 目录（模板图片）
         ('assets', 'assets'),
+        ('module/config/argument', 'module/config/argument'),
+        ('module/webui/css', 'module/webui/css'),
     ],
     hiddenimports=[
         'pywebio',
         'pywebio.platform.tornado',
+        'pywebio.platform.fastapi',
         'pywebio.output',
         'pywebio.input',
         'pywebio.pin',
@@ -27,10 +29,19 @@ a = Analysis(
         'tornado.web',
         'tornado.ioloop',
         'tornado.websocket',
+        'uvicorn',
+        'fastapi',
         'yaml',
         'cv2',
         'numpy',
         'PIL',
+        # ALAS 风格模块
+        'module.config',
+        'module.config.argument',
+        'module.webui',
+        'module.base',
+        'tasks.secret_shop',
+        'deploy',
     ],
     hookspath=[],
     hooksconfig={},
@@ -49,13 +60,13 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='ShopBot',
+    name='E7ShopBot',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,  # 保留控制台窗口，方便看日志
-    icon=None,     # 可以换成自定义 ico 图标
+    console=True,
+    icon=None,
 )
 
 coll = COLLECT(
@@ -66,5 +77,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='ShopBot',
+    name='E7ShopBot',
 )
