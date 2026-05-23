@@ -78,6 +78,7 @@ class ShopBot:
         self._ocr = OCR
         self.scene_manager = SceneManager(self._ocr)
         self._refresh_btn_pos = None  # 校准后缓存刷新按钮位置
+        self._skystone_known = False  # 首次 OCR 是否成功读到天空石
         self._skystone_check_counter = 99  # 首次检查强制 OCR
 
     def start(self) -> None:
@@ -459,7 +460,7 @@ class ShopBot:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _shelf_is_at_bottom(prev: np.ndarray, curr: np.ndarray, threshold: float = 0.95) -> bool:
+    def _shelf_is_at_bottom(prev: np.ndarray, curr: np.ndarray, threshold: float = 0.85) -> bool:
         """通过货架区域图像相似度判断是否到底。
 
         滑动前后对比货架区域 (y=120-540, x=300-900)，
@@ -562,33 +563,35 @@ class ShopBot:
     # ------------------------------------------------------------------
 
     def check_resources(self) -> bool:
-        """检查天空石是否足够（每 5 轮 OCR 一次，中间用推算值）。"""
+        """检查天空石是否足够（每 10 轮 OCR 一次，中间用推算值）。"""
         cfg = self.config.get()
         if cfg.shop.skystone_threshold <= 0:
             return True
 
-        # 每 5 轮 OCR 校准一次，避免偏差累积
-        need_check = False
-        if self._skystone_check_counter >= 5:
+        # 首次 OCR 若失败，不推算（skystone_remaining 无效）
+        if not self._skystone_known:
+            return True
+
+        # 每 10 轮 OCR 校准一次，避免偏差累积
+        if self._skystone_check_counter >= 10:
             image = self.device.screenshot()
             value, conf = self._ocr.read_number(
                 image, region=SKYSTONE_REGION, min_confidence=0.3
             )
             if value is not None:
                 self.stats.skystone_remaining = value
+                self._skystone_known = True
                 logger.info(f"天空石(OCR): {value} (conf={conf:.2f})")
-                need_check = True
             else:
                 logger.warning("天空石 OCR 失败，使用推算值")
             self._skystone_check_counter = 0
 
-        if need_check or self.stats.skystone_remaining > 0:
-            logger.info(
-                f"天空石: {self.stats.skystone_remaining}, "
-                f"阈值: {cfg.shop.skystone_threshold}"
-            )
-            if self.stats.skystone_remaining < cfg.shop.skystone_threshold:
-                return False
+        logger.info(
+            f"天空石: {self.stats.skystone_remaining}, "
+            f"阈值: {cfg.shop.skystone_threshold}"
+        )
+        if self.stats.skystone_remaining < cfg.shop.skystone_threshold:
+            return False
 
         return True
 
@@ -597,7 +600,7 @@ class ShopBot:
                         bookmarks_bought=0, max_bookmarks=0,
                         mystic_medals_bought=0, max_mystic_medals=0,
                         skystone_spent=0, max_skystone_spend=0):
-        if skystone_remaining < skystone_threshold:
+        if skystone_threshold > 0 and skystone_remaining < skystone_threshold:
             logger.info(f"停止：天空石 {skystone_remaining} < 阈值 {skystone_threshold}")
             return False
         if refresh_count >= max_refresh_count:
