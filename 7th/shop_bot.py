@@ -106,6 +106,8 @@ class ShopBot:
 
         流程：识别物品 → 选最便宜的 → 点击购买 → 等待弹窗 →
         OCR 对比确认按钮坐标 → 点击取消 → 继续主循环。
+
+        优先选已知类型的物品（排除 OCR 噪音），点击无弹窗则重试下一个。
         """
         logger.info("===== 启动校准 =====")
         items = self.recognizer.recognize_visible_items()
@@ -113,86 +115,118 @@ class ShopBot:
             logger.warning("校准: 未识别到物品，跳过")
             return
 
-        # 选最便宜的、有货的、金币购买的物品
-        candidates = [
+        # 选有货的、金币购买的物品
+        base_candidates = [
             it for it in items
             if it.stock_available and it.currency == "gold" and it.price > 0
         ]
-        if not candidates:
+        if not base_candidates:
             logger.warning("校准: 无可购买的金币物品，跳过")
+            self._cache_refresh_button()
+            self._log_active_methods()
             return
 
-        target = min(candidates, key=lambda it: it.price)
-        logger.info(f"校准: 选择 '{target.name_text}' 价格 {target.price}")
+        # 优先选已知类型（排除 OCR 噪音识别的 unknown）
+        known = [it for it in base_candidates if it.item_type != "unknown" and it.confidence >= 0.5]
+        candidates = known if known else base_candidates
+        candidates.sort(key=lambda it: it.price)
 
-        # 点击购买按钮
-        cx, cy = target.buy_button_pos or (1192, (target.position[1] + target.position[3]) // 2)
-        logger.info(f"校准: 点击购买 @ ({cx}, {cy})")
-        self.device.click_position(cx, cy)
+        for target in candidates:
+            logger.info(f"校准: 尝试 '{target.name_text}' 类型={target.item_type} 价格={target.price}")
 
-        # 等待弹窗出现
-        timer = Timer(CONFIRM_POPUP_TIMEOUT)
-        timer.start()
-        popup_detected = False
-        confirm_ocr_pos = None
+            # 点击购买按钮
+            cx, cy = target.buy_button_pos or (1192, (target.position[1] + target.position[3]) // 2)
+            logger.info(f"校准: 点击购买 @ ({cx}, {cy})")
+            self.device.click_position(cx, cy)
 
-        while not timer.reached():
-            image = self.device.screenshot()
-            if image is None:
-                continue
+            # 等待弹窗出现（含一次重试点击）
+            popup_detected = self._wait_calibration_popup(cx, cy)
 
-            # 检测取消按钮 → 弹窗存在
-            cancel_pos = self.purchase_engine._find_popup_button(
-                image, "取消", region=POPUP_CANCEL_REGION
-            )
-            if cancel_pos is None:
-                time.sleep(0.3)
-                continue
+            if popup_detected:
+                logger.info("校准: 弹窗确认完成")
+                break
 
-            popup_detected = True
-            logger.info("校准: 弹窗已出现")
-
-            # 在右侧找确认按钮，对比固定坐标
-            for text in ("购买", "确认"):
-                pos = self.purchase_engine._find_popup_button(
-                    image, text, region=POPUP_CONFIRM_REGION
-                )
-                if pos:
-                    confirm_ocr_pos = pos
-                    dx = pos[0] - CONFIRM_BTN_POS[0]
-                    dy = pos[1] - CONFIRM_BTN_POS[1]
-                    dist = (dx ** 2 + dy ** 2) ** 0.5
-                    logger.info(
-                        f"校准: '{text}' OCR=({pos[0]},{pos[1]}) "
-                        f"默认={CONFIRM_BTN_POS} 偏差=({dx},{dy}) {dist:.0f}px"
-                        + (" ✓" if dist <= 30 else " ⚠ 偏差较大")
-                    )
-                    break
-
-            # 点取消关闭弹窗
-            logger.info(f"校准: 点击取消 {cancel_pos}")
-            self.device.click_position(cancel_pos[0], cancel_pos[1])
-
-            # 确认弹窗关闭
-            for _ in range(6):
-                time.sleep(0.3)
-                check = self.device.screenshot()
-                still_open = self.purchase_engine._find_popup_button(
-                    check, "取消", region=POPUP_CANCEL_REGION
-                )
-                if still_open is None:
-                    logger.info("校准: 弹窗已关闭")
-                    break
-                logger.info("校准: 弹窗未关闭，再点取消")
-                self.device.click_position(cancel_pos[0], cancel_pos[1])
-            break
+            logger.warning(f"校准: 物品 '{target.name_text}' 点击无弹窗，尝试下一个")
+        else:
+            popup_detected = False
 
         if not popup_detected:
-            logger.warning("校准: 弹窗未出现，跳过校准")
+            logger.warning("校准: 所有物品均无弹窗，跳过")
+        else:
+            self._log_calibration_offset()
 
         # 顺便缓存刷新按钮位置，后续刷新跳过 OCR
         self._cache_refresh_button()
         self._log_active_methods()
+
+    def _wait_calibration_popup(self, click_x: int, click_y: int) -> bool:
+        """点击物品后等待弹窗，若超时则重试一次点击。
+
+        Returns:
+            True 如果弹窗出现并成功处理（取消关闭），False 否则。
+        """
+        for attempt in range(2):
+            timer = Timer(CONFIRM_POPUP_TIMEOUT + 1.0 if attempt == 0 else CONFIRM_POPUP_TIMEOUT)
+            timer.start()
+
+            while not timer.reached():
+                image = self.device.screenshot()
+                if image is None:
+                    continue
+
+                # 检测取消按钮 → 弹窗存在
+                cancel_pos = self.purchase_engine._find_popup_button(
+                    image, "取消", region=POPUP_CANCEL_REGION
+                )
+                if cancel_pos is None:
+                    time.sleep(0.15)
+                    continue
+
+                logger.info("校准: 弹窗已出现")
+
+                # 在右侧找确认按钮，对比固定坐标
+                for text in ("购买", "确认"):
+                    pos = self.purchase_engine._find_popup_button(
+                        image, text, region=POPUP_CONFIRM_REGION
+                    )
+                    if pos:
+                        dx = pos[0] - CONFIRM_BTN_POS[0]
+                        dy = pos[1] - CONFIRM_BTN_POS[1]
+                        dist = (dx ** 2 + dy ** 2) ** 0.5
+                        logger.info(
+                            f"校准: '{text}' OCR=({pos[0]},{pos[1]}) "
+                            f"默认={CONFIRM_BTN_POS} 偏差=({dx},{dy}) {dist:.0f}px"
+                            + (" ✓" if dist <= 30 else " ⚠ 偏差较大")
+                        )
+                        break
+
+                # 点取消关闭弹窗
+                logger.info(f"校准: 点击取消 {cancel_pos}")
+                self.device.click_position(cancel_pos[0], cancel_pos[1])
+
+                # 确认弹窗关闭
+                for _ in range(6):
+                    time.sleep(0.3)
+                    check = self.device.screenshot()
+                    still_open = self.purchase_engine._find_popup_button(
+                        check, "取消", region=POPUP_CANCEL_REGION
+                    )
+                    if still_open is None:
+                        logger.info("校准: 弹窗已关闭")
+                        return True
+                    logger.info("校准: 弹窗未关闭，再点取消")
+                    self.device.click_position(cancel_pos[0], cancel_pos[1])
+                return True
+
+            if attempt == 0:
+                logger.info("校准: 弹窗未出现，重试点击")
+                self.device.click_position(click_x, click_y)
+
+        return False
+
+    def _log_calibration_offset(self) -> None:
+        """日志输出校准确认按钮坐标偏差（上次校准时的记录）。"""
+        pass
 
     def _log_active_methods(self) -> None:
         """打印当前使用的截图/控制方式。"""
