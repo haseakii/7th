@@ -41,7 +41,7 @@ GOLD_REGION = (450, 5, 970, 40)
 
 # 滑动翻页参数
 SCROLL_AREA = (800, 400, 800, 150)
-SCROLL_WAIT = 0.5  # 等待滑动动画结束
+SCROLL_WAIT = 0.3  # 等待滑动动画结束
 MAX_SCROLL_COUNT = 8
 
 # 刷新确认弹窗等待超时
@@ -78,6 +78,7 @@ class ShopBot:
         self._ocr = OCR
         self.scene_manager = SceneManager(self._ocr)
         self._refresh_btn_pos = None  # 校准后缓存刷新按钮位置
+        self._skystone_check_counter = 99  # 首次检查强制 OCR
 
     def start(self) -> None:
         if self._running:
@@ -351,6 +352,8 @@ class ShopBot:
                         break
                     self.stats.total_refreshes += 1
                     self.stats.skystone_spent += SKYSTONE_PER_REFRESH
+                    self.stats.skystone_remaining -= SKYSTONE_PER_REFRESH
+                    self._skystone_check_counter += 1
                     consecutive_errors = 0
                 except Exception as e:
                     consecutive_errors += 1
@@ -559,20 +562,33 @@ class ShopBot:
     # ------------------------------------------------------------------
 
     def check_resources(self) -> bool:
-        """通过 OCR 读取天空石数量并检查是否足够。"""
+        """检查天空石是否足够（每 5 轮 OCR 一次，中间用推算值）。"""
         cfg = self.config.get()
         if cfg.shop.skystone_threshold <= 0:
             return True
 
-        image = self.device.screenshot()
-        value, conf = self._ocr.read_number(image, region=SKYSTONE_REGION, min_confidence=0.3)
-        if value is not None:
-            self.stats.skystone_remaining = value
-            logger.info(f"天空石: {value} (conf={conf:.2f}), 阈值: {cfg.shop.skystone_threshold}")
-            if value < cfg.shop.skystone_threshold:
+        # 每 5 轮 OCR 校准一次，避免偏差累积
+        need_check = False
+        if self._skystone_check_counter >= 5:
+            image = self.device.screenshot()
+            value, conf = self._ocr.read_number(
+                image, region=SKYSTONE_REGION, min_confidence=0.3
+            )
+            if value is not None:
+                self.stats.skystone_remaining = value
+                logger.info(f"天空石(OCR): {value} (conf={conf:.2f})")
+                need_check = True
+            else:
+                logger.warning("天空石 OCR 失败，使用推算值")
+            self._skystone_check_counter = 0
+
+        if need_check or self.stats.skystone_remaining > 0:
+            logger.info(
+                f"天空石: {self.stats.skystone_remaining}, "
+                f"阈值: {cfg.shop.skystone_threshold}"
+            )
+            if self.stats.skystone_remaining < cfg.shop.skystone_threshold:
                 return False
-        else:
-            logger.warning("未能读取天空石数量，跳过检查")
 
         return True
 
