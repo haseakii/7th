@@ -41,14 +41,14 @@ GOLD_REGION = (450, 5, 970, 40)
 
 # 滑动翻页参数
 SCROLL_AREA = (800, 400, 800, 150)
-SCROLL_WAIT = 0.3  # 等待滑动动画结束
+SCROLL_WAIT = 0.5  # 等待滑动动画结束
 MAX_SCROLL_COUNT = 8
 
 # 刷新确认弹窗等待超时
 REFRESH_CONFIRM_TIMEOUT = 3.0
 REFRESH_MAX_RETRIES = 2
 REFRESH_CONFIRM_BTN_POS = (748, 460)
-SHELF_LOAD_WAIT = 0.5
+SHELF_LOAD_WAIT = 0.8
 SKYSTONE_PER_REFRESH = 3
 MAX_CONSECUTIVE_ERRORS = 3
 
@@ -181,7 +181,7 @@ class ShopBot:
                     image, "取消", region=POPUP_CANCEL_REGION
                 )
                 if cancel_pos is None:
-                    time.sleep(0.15)
+                    time.sleep(0.3)
                     continue
 
                 logger.info("校准: 弹窗已出现")
@@ -439,10 +439,10 @@ class ShopBot:
             self.device.click_position(btn_pos[0], btn_pos[1])
 
             # 等弹窗出现后直接点固定坐标，跳过 OCR
-            time.sleep(0.4)
+            time.sleep(0.6)
             logger.info(f"点击刷新确认 @ {REFRESH_CONFIRM_BTN_POS}")
             self.device.click_position(REFRESH_CONFIRM_BTN_POS[0], REFRESH_CONFIRM_BTN_POS[1])
-            time.sleep(0.3)
+            time.sleep(0.5)
             confirmed = True
 
             if confirmed:
@@ -491,7 +491,7 @@ class ShopBot:
             start=(SCROLL_AREA[2], SCROLL_AREA[3]),  # x=640, y=150
             end=(SCROLL_AREA[0], SCROLL_AREA[1]),    # x=640, y=400
         )
-        time.sleep(0.3)
+        time.sleep(0.4)
 
     def _scroll_down_and_buy(self) -> List[PurchaseResult]:
         """从顶部开始，逐段下滑识别并购买。

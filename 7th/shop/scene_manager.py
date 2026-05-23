@@ -75,17 +75,18 @@ class SceneManager:
     # ------------------------------------------------------------------
 
     def _is_purchase_popup(self, image: np.ndarray) -> bool:
-        """轻量检测：弹窗取消区域 OCR 找"取消"关键词。
+        """检测购买弹窗。
 
-        只搜索 POPUP_CANCEL_REGION（约 340×110 像素），
-        比全图或大面积 OCR 快得多。找到"取消"即认为弹窗存在。
-
-        Args:
-            image: BGR 格式截图。
-
-        Returns:
-            bool: 是否检测到购买弹窗。
+        先做亮度预检（~1ms），弹窗区域明显暗于正常货架背景，
+        亮度高时可直接跳过 OCR，降低 CPU 消耗。
         """
+        # 亮度预检：弹窗区域有暗色覆盖层 → 亮度低
+        cancel_area = crop(image, POPUP_CANCEL_REGION)
+        brightness = float(cancel_area.mean())
+        if brightness > 120:
+            return False
+
+        # OCR 确认
         blocks = self._ocr.read(
             image,
             region=POPUP_CANCEL_REGION,

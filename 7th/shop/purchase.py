@@ -253,6 +253,9 @@ class PurchaseEngine:
         """执行单个物品的购买流程。
 
         流程：点击物品 → 等待弹窗 → OCR 检测确认 → 点击确认/购买 → 验证。
+
+        CPU 优化：先固定等弹窗动画（~0.6s），首次 OCR 即命中可跳过轮询。
+        首次未检测到则退回到弹窗轮询。
         """
         logger.info(f"开始购买: {item.item_type}, 价格: {item.price}")
 
@@ -267,20 +270,17 @@ class PurchaseEngine:
             logger.info(f"未检测到购买按钮，点击行中央 ({click_x}, {click_y})")
         self.device.click_position(click_x, click_y)
 
-        # 2. 等待并处理确认弹窗
-        confirm_timer = Timer(CONFIRM_POPUP_TIMEOUT)
-        confirm_timer.start()
+        # 2. 先固定等待弹窗动画（避免空转 OCR 轮询 → CPU 优化）
+        time.sleep(0.6)
+
+        # 3. 首次截图 OCR — 正常情况弹窗已出现，一次搞定
+        image = self.device.screenshot()
         confirmed = False
 
-        while not confirm_timer.reached():
-            image = self.device.screenshot()
-            if image is None:
-                continue
-
-            # 单次 OCR 扫描弹窗所有状态
+        if image is not None:
             popup = self._scan_popup(image)
 
-            # 检查金币不足
+            # 金币不足
             if popup.insufficient_gold:
                 reason = "金币不足"
                 logger.warning(f"购买失败 - {item.item_type}: {reason}")
@@ -292,26 +292,63 @@ class PurchaseEngine:
                     reason=reason,
                 )
 
-            # 检测并点击确认弹窗
+            # 确认弹窗已出现
             if popup.has_cancel and popup.has_buy_or_confirm:
                 logger.info("检测到确认弹窗")
                 self._click_confirm_in_popup(image)
-                time.sleep(0.3)
+                time.sleep(0.5)
 
-                # 检查二次确认（复用 _scan_popup）
+                # 检查二次确认
                 retry_img = self.device.screenshot()
                 retry_popup = self._scan_popup(retry_img)
                 if retry_popup.has_cancel and retry_popup.has_buy_or_confirm:
                     logger.info("检测到二次确认弹窗")
                     self._click_confirm_in_popup(retry_img)
-                    time.sleep(0.3)
+                    time.sleep(0.5)
 
                 confirmed = True
-                break
 
-            time.sleep(0.15)
+        # 4. 首次未检测到 → 轮询等待弹窗（重试点击 + 轮询，作为后备）
+        if not confirmed:
+            confirm_timer = Timer(CONFIRM_POPUP_TIMEOUT)
+            confirm_timer.start()
 
-        # 弹窗未出现 → 重试
+            while not confirm_timer.reached():
+                image = self.device.screenshot()
+                if image is None:
+                    continue
+
+                popup = self._scan_popup(image)
+
+                if popup.insufficient_gold:
+                    reason = "金币不足"
+                    logger.warning(f"购买失败 - {item.item_type}: {reason}")
+                    self._close_popup(image)
+                    return PurchaseResult(
+                        item_type=item.item_type,
+                        price=item.price,
+                        success=False,
+                        reason=reason,
+                    )
+
+                if popup.has_cancel and popup.has_buy_or_confirm:
+                    logger.info("检测到确认弹窗")
+                    self._click_confirm_in_popup(image)
+                    time.sleep(0.5)
+
+                    retry_img = self.device.screenshot()
+                    retry_popup = self._scan_popup(retry_img)
+                    if retry_popup.has_cancel and retry_popup.has_buy_or_confirm:
+                        logger.info("检测到二次确认弹窗")
+                        self._click_confirm_in_popup(retry_img)
+                        time.sleep(0.5)
+
+                    confirmed = True
+                    break
+
+                time.sleep(0.3)
+
+        # 5. 弹窗未出现 → 重试点击一次
         if not confirmed:
             logger.warning(f"确认弹窗未出现，重试点击: {item.item_type}")
             self.device.click_position(click_x, click_y)
@@ -334,11 +371,10 @@ class PurchaseEngine:
                 reason=reason,
             )
 
-        # 3. 验证购买结果
-        time.sleep(0.5)
+        # 6. 验证购买结果
+        time.sleep(0.6)
         verify_img = self.device.screenshot()
 
-        # 检查弹窗是否已关闭
         verify_popup = self._scan_popup(verify_img)
         if verify_popup.has_cancel and verify_popup.has_buy_or_confirm:
             logger.warning(f"弹窗仍未关闭，重试确认: {item.item_type}")
@@ -351,7 +387,7 @@ class PurchaseEngine:
                     self._click_confirm_in_popup(img)
                     time.sleep(0.3)
                     break
-                time.sleep(0.15)
+                time.sleep(0.3)
 
             time.sleep(0.5)
             final_img = self.device.screenshot()
