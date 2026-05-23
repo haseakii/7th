@@ -79,17 +79,5 @@ def _run_headless(config_path: str) -> None:
     logger.info("程序退出")
 
 
-def _run_headless(bot):
-    bot.start()
-    try:
-        bot._thread.join()
-    except KeyboardInterrupt:
-        logger.info("收到 Ctrl+C，正在停止...")
-        bot.stop()
-        if bot._thread:
-            bot._thread.join(timeout=30)
-    logger.info("程序退出")
-
-
 if __name__ == "__main__":
     main()

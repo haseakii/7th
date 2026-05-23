@@ -432,9 +432,14 @@ class ShopBotGUI:
             put_input("device_serial", label="模拟器序列号",
                       value=dev.serial, readonly=running)
             put_select("device_screenshot_method", label="截图方式",
-                       options=["ADB", "uiautomator2"], value=dev.screenshot_method)
+                       options=["auto", "adb", "adb_raw", "uiautomator2"],
+                       value=dev.screenshot_method)
             put_select("device_control_method", label="控制方式",
-                       options=["ADB", "uiautomator2"], value=dev.control_method)
+                       options=["auto", "adb", "uiautomator2"],
+                       value=dev.control_method)
+            put_select("device_ocr_method", label="OCR引擎",
+                       options=["rapidocr", "easyocr", "paddleocr"],
+                       value=getattr(dev, 'ocr_method', 'rapidocr'))
 
             if not running:
                 def _s(val):
@@ -446,9 +451,15 @@ class ShopBotGUI:
                 def _sc(val):
                     if not self.bot.alive:
                         self.config.update("device", "control_method", str(val))
+                def _so(val):
+                    if not self.bot.alive:
+                        self.config.update("device", "ocr_method", str(val))
+                        from shop.ocr_engine import OCR
+                        OCR.set_backend(str(val))
                 pin_on_change("device_serial", onchange=_s)
                 pin_on_change("device_screenshot_method", onchange=_ss)
                 pin_on_change("device_control_method", onchange=_sc)
+                pin_on_change("device_ocr_method", onchange=_so)
 
     # ── template manager ────────────────────────────────────────────
     # 所有模板定义：name, label, description, default file path

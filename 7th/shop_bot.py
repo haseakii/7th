@@ -18,6 +18,8 @@ from shop.navigator import ShopNavigator
 from shop.ocr_engine import OCR
 from shop.purchase import PurchaseEngine, PurchaseResult, CONFIRM_BTN_POS, CANCEL_BTN_POS, POPUP_CANCEL_REGION, POPUP_CONFIRM_REGION, CONFIRM_POPUP_TIMEOUT
 from shop.recognizer import ItemRecognizer
+from shop.scene import Scene
+from shop.scene_manager import SceneManager
 
 # ---------------------------------------------------------------------------
 # 常量
@@ -72,6 +74,7 @@ class ShopBot:
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._ocr = OCR
+        self.scene_manager = SceneManager(self._ocr)
         self._refresh_btn_pos = None  # 校准后缓存刷新按钮位置
 
     def start(self) -> None:
@@ -187,6 +190,73 @@ class ShopBot:
 
         # 顺便缓存刷新按钮位置，后续刷新跳过 OCR
         self._cache_refresh_button()
+        self._log_active_methods()
+
+    def _log_active_methods(self) -> None:
+        """打印当前使用的截图/控制方式。"""
+        ss = self.device._screenshot_strategy
+        cs = self.device._control_strategy
+        ss_name = ss.name if ss else self.device.screenshot_method
+        cs_name = cs.name if cs else self.device.control_method
+        logger.info(f"截图方式: {ss_name}")
+        logger.info(f"控制方式: {cs_name}")
+
+    # ------------------------------------------------------------------
+    # 场景校验
+    # ------------------------------------------------------------------
+
+    def _ensure_secret_shop(self, image=None) -> bool:
+        """确保当前在秘密商店，如果不在则尝试恢复。
+
+        Args:
+            image: 可选的截图，不传时自动截图。
+
+        检测当前场景并处理异常：
+        - PURCHASE_POPUP → 点击取消关闭弹窗
+        - LOBBY → 重新导航到秘密商店
+        - UNKNOWN → 先关弹窗，再导航
+        - SECRET_SHOP → 无需操作
+
+        Returns:
+            True 如果在（或已回到）秘密商店，False 表示无法恢复。
+        """
+        if image is None:
+            image = self.device.screenshot()
+        if image is None:
+            return False
+
+        scene = self.scene_manager.detect(image)
+        logger.debug(f"场景校验: {scene.value}")
+
+        if scene == Scene.SECRET_SHOP:
+            return True
+
+        if scene == Scene.PURCHASE_POPUP:
+            logger.info("场景校验: 检测到购买弹窗残留，尝试关闭")
+            if not self.purchase_engine.close_popup(image):
+                logger.debug("未找到取消按钮，使用固定坐标")
+                self.device.click_position(CANCEL_BTN_POS[0], CANCEL_BTN_POS[1])
+            time.sleep(0.5)
+            # 再次截图确认弹窗已关闭并重新校验
+            after = self.device.screenshot()
+            if after is not None and self.scene_manager.ensure(after, Scene.SECRET_SHOP):
+                return True
+            # 如果仍在弹窗状态，走导航流程（更彻底的恢复）
+            logger.info("弹窗关闭后未回到商店，尝试导航")
+            return self.navigator.navigate_to_secret_shop()
+
+        if scene == Scene.LOBBY:
+            logger.warning("场景校验: 检测到大堂，重新导航到秘密商店")
+            return self.navigator.navigate_to_secret_shop()
+
+        # UNKNOWN
+        logger.warning("场景校验: 未知场景，尝试恢复")
+        if self.navigator.handle_popup():
+            time.sleep(1.0)
+            after = self.device.screenshot()
+            if after is not None and self.scene_manager.ensure(after, Scene.SECRET_SHOP):
+                return True
+        return self.navigator.navigate_to_secret_shop()
 
     # ------------------------------------------------------------------
     # 主循环
@@ -205,6 +275,12 @@ class ShopBot:
             while not self._stop_event.is_set():
                 refresh_count = self.stats.total_refreshes
                 logger.info(f"===== 第 {refresh_count + 1} 轮 =====")
+
+                # 场景校验：确保在秘密商店
+                if not self._ensure_secret_shop():
+                    logger.error("场景校验失败，无法回到秘密商店，终止运行")
+                    break
+
                 try:
                     results: List[PurchaseResult] = []
 
@@ -300,6 +376,11 @@ class ShopBot:
 
     def refresh_shop(self) -> bool:
         """刷新货架（优先用缓存位置，跳过 OCR）。"""
+        # 刷新前校验场景
+        if not self._ensure_secret_shop():
+            logger.error("场景校验失败，无法刷新")
+            return False
+
         for attempt in range(1, REFRESH_MAX_RETRIES + 1):
             # 优先用缓存位置
             btn_pos = self._refresh_btn_pos
@@ -375,8 +456,18 @@ class ShopBot:
                 self.device.swipe(start, end)
                 time.sleep(SCROLL_WAIT)  # 等待滑动动画结束
 
+            # 截图一次，复用给场景校验和物品识别
+            image = self.device.screenshot()
+            if image is None:
+                break
+
+            # 场景校验
+            if not self._ensure_secret_shop(image):
+                logger.warning("场景校验失败，终止滑动购买")
+                break
+
             # 识别当前可视物品，立即购买
-            items = self.recognizer.recognize_visible_items()
+            items = self.recognizer.recognize_visible_items(image)
 
             # 比较识别结果（去除 name_text 空白干扰），无变化则到底
             curr_keys = {(it.item_type, it.name_text.strip() if it.name_text else "", round(it.position[1] / 20))

@@ -360,10 +360,23 @@ class PurchaseEngine:
         logger.info(f"货架处理完成，共购买 {bought_count} 个物品")
         return results
 
+    def close_popup(self, image) -> bool:
+        """关闭当前弹窗（点击取消）。
+
+        公开接口，供 SceneManager 等外部调用。
+
+        Args:
+            image: 截图
+
+        Returns:
+            bool: 是否成功找到并点击了取消按钮
+        """
+        return self._click_popup_button(image, "取消")
+
     def _close_popup(self, image) -> None:
-        """尝试关闭当前弹窗（点击取消）。"""
+        """尝试关闭当前弹窗（点击取消）。内部使用。"""
         try:
-            if not self._click_popup_button(image, "取消"):
+            if not self.close_popup(image):
                 # 后备：点击弹窗外部区域
                 self.device.click_position(800, 600)
                 time.sleep(0.3)

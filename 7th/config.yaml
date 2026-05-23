@@ -1,7 +1,8 @@
 device:
   serial: 127.0.0.1:16384
-  screenshot_method: ADB
-  control_method: ADB
+  screenshot_method: auto
+  control_method: auto
+  ocr_method: rapidocr
 shop:
   buy_bookmarks: true
   buy_mystic_medals: true

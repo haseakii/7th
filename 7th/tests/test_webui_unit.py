@@ -549,8 +549,8 @@ class TestRenderDeviceConfig:
         mock_input.assert_called_once()
         assert mock_input.call_args[0][0] == "device_serial"
 
-        # 2 selects (screenshot_method, control_method)
-        assert mock_select.call_count == 2
+        # 3 selects (screenshot_method, control_method, ocr_method)
+        assert mock_select.call_count == 3
 
     def test_device_config_running_shows_warning(self):
         """When bot is running, should show warning HTML."""
@@ -633,8 +633,8 @@ class TestRenderDeviceConfig:
              patch("pywebio.pin.pin_on_change") as mock_pin_change:
             gui.render_device_config()
 
-        # Should register 3 callbacks: serial, screenshot_method, control_method
-        assert mock_pin_change.call_count == 3
+        # Should register 4 callbacks: serial, screenshot_method, control_method, ocr_method
+        assert mock_pin_change.call_count == 4
 
     def test_device_config_change_persists(self):
         """Changing device config values should call config.update."""

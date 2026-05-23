@@ -54,8 +54,9 @@ class TestDataclassDefaults:
     def test_device_config_defaults(self):
         cfg = DeviceConfig()
         assert cfg.serial == "127.0.0.1:16384"
-        assert cfg.screenshot_method == "ADB"
-        assert cfg.control_method == "ADB"
+        assert cfg.screenshot_method == "auto"
+        assert cfg.control_method == "auto"
+        assert cfg.ocr_method == "rapidocr"
 
     def test_app_config_defaults(self):
         cfg = AppConfig()
@@ -233,4 +234,4 @@ class TestLogConfig:
             log_calls = [str(c) for c in mock_logger.info.call_args_list]
             combined = " ".join(log_calls)
             assert "127.0.0.1:16384" in combined
-            assert "ADB" in combined
+            assert "auto" in combined

@@ -17,6 +17,7 @@ from module.base.button import Button
 from module.base.timer import Timer
 from module.base.utils import crop
 from module.device.device import DeviceController
+from shop.scene import Scene
 
 # ---------------------------------------------------------------------------
 # Button 实例（2026-05-08 实机截图重新校准，1280×720 分辨率）
@@ -86,28 +87,28 @@ class ShopNavigator:
     def __init__(self, device: DeviceController):
         self.device = device
 
-    def detect_current_scene(self) -> str:
+    def detect_current_scene(self) -> Scene:
         """检测当前界面状态。
 
         通过多区域亮度分析判断场景：
-        - secret_shop: 导航顶暗+导航中亮+内容区暗
-        - lobby: 导航顶亮+内容区亮
+        - SECRET_SHOP: 导航顶暗+导航中亮+内容区暗
+        - LOBBY: 导航顶亮+内容区亮
 
         Returns:
-            str: 'secret_shop' | 'lobby' | 'unknown'
+            Scene 枚举值。
         """
         image = self.device.screenshot()
 
         if self._is_secret_shop(image):
             logger.info("场景检测: 秘密商店")
-            return "secret_shop"
+            return Scene.SECRET_SHOP
 
         if self._is_lobby(image):
             logger.info("场景检测: 游戏大厅")
-            return "lobby"
+            return Scene.LOBBY
 
         logger.warning("场景检测: 未知界面")
-        return "unknown"
+        return Scene.UNKNOWN
 
     def _is_secret_shop(self, image) -> bool:
         """通过多区域亮度特征检测是否在秘密商店。
@@ -189,17 +190,17 @@ class ShopNavigator:
         while not timer.reached():
             scene = self.detect_current_scene()
 
-            if scene == "secret_shop":
+            if scene == Scene.SECRET_SHOP:
                 logger.info("已到达秘密商店")
                 return True
 
-            if scene == "lobby":
+            if scene == Scene.LOBBY:
                 logger.info("从大厅点击左侧导航栏的秘密商店入口")
                 self.device.click(SECRET_SHOP_ENTRANCE_BTN)
                 time.sleep(TRANSITION_WAIT)
                 continue
 
-            # unknown — 尝试处理弹窗
+            # UNKNOWN — 尝试处理弹窗
             if self.handle_popup():
                 logger.info("已关闭弹窗，继续导航")
                 time.sleep(TRANSITION_WAIT)

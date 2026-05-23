@@ -418,9 +418,17 @@ class ItemRecognizer:
 
         return items
 
-    def recognize_visible_items(self) -> List[ShopItem]:
-        """识别当前可视区域内的所有物品（整区单次 OCR）。"""
-        image = self.device.screenshot()
+    def recognize_visible_items(self, image=None) -> List[ShopItem]:
+        """识别当前可视区域内的所有物品（整区单次 OCR）。
+
+        Args:
+            image: 可选的截图，不传时自动截图。
+
+        Returns:
+            识别出的物品列表。
+        """
+        if image is None:
+            image = self.device.screenshot()
         if image is None:
             return []
 

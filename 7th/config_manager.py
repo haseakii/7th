@@ -35,8 +35,9 @@ class ShopConfig:
 class DeviceConfig:
     """设备连接配置"""
     serial: str = "127.0.0.1:16384"
-    screenshot_method: str = "ADB"
-    control_method: str = "ADB"
+    screenshot_method: str = "auto"
+    control_method: str = "auto"
+    ocr_method: str = "rapidocr"
 
 
 @dataclass
@@ -143,7 +144,8 @@ class ConfigManager:
         cfg = self._config
         logger.info(f"配置已加载 - 设备: {cfg.device.serial}, "
                      f"截图: {cfg.device.screenshot_method}, "
-                     f"控制: {cfg.device.control_method}")
+                     f"控制: {cfg.device.control_method}, "
+                     f"OCR: {cfg.device.ocr_method}")
         logger.info(f"购买列表 - 书签: {cfg.shop.buy_bookmarks}, "
                      f"神秘奖章: {cfg.shop.buy_mystic_medals}, "
                      f"装备: {cfg.shop.buy_equipment}, "

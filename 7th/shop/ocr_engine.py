@@ -1,8 +1,8 @@
 """
-OCR 引擎封装 — 基于 RapidOCR
+OCR 引擎封装 — 支持多种后端
 
 为识别器、购买引擎、主控循环提供统一的 OCR 接口。
-RapidOCR 支持中英文混合识别，~1s/图（CPU），满足实时需求。
+默认使用 RapidOCR，可通过 set_backend() 切换到其他后端。
 
 典型用途:
   >>> from shop.ocr_engine import OCR
@@ -11,7 +11,6 @@ RapidOCR 支持中英文混合识别，~1s/图（CPU），满足实时需求。
   >>> digit_blocks = OCR.read_digits(img, region=...)     # 只取数字
 """
 
-import time
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -47,24 +46,37 @@ class TextBlock:
 
 
 class OcrEngine:
-    """RapidOCR 引擎封装，延迟初始化 + 缓存提高性能。"""
+    """OCR 引擎封装，支持多后端切换，延迟初始化提高性能。"""
 
     _instance = None
-    _reader = None
+    _backend = None
+    _backend_name = "rapidocr"
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def _ensure_reader(self):
-        if self._reader is None:
-            from rapidocr import RapidOCR
-            logger.info("初始化 RapidOCR 引擎（首次加载约需数秒）...")
-            t0 = time.time()
-            self._reader = RapidOCR()
-            logger.info(f"RapidOCR 引擎就绪（耗时 {time.time() - t0:.1f}s）")
-        return self._reader
+    @classmethod
+    def set_backend(cls, name: str) -> None:
+        """切换到指定 OCR 后端。
+
+        Args:
+            name: 后端名（rapidocr, easyocr, paddleocr 等）
+        """
+        if name != cls._backend_name:
+            cls._backend = None  # 强制重新初始化
+            cls._backend_name = name
+            logger.info(f"OCR 后端已切换为: '{name}'（下次 OCR 调用时生效）")
+
+    def _ensure_backend(self):
+        """确保 OCR 后端已加载。"""
+        if self._backend is not None:
+            return self._backend
+        from shop.ocr_backends import create as create_backend
+        logger.info(f"初始化 OCR 后端: '{self._backend_name}'")
+        self._backend = create_backend(self._backend_name)
+        return self._backend
 
     def read(
         self,
@@ -82,7 +94,7 @@ class OcrEngine:
         Returns:
             按从上到下、从左到右排序的文字块列表
         """
-        reader = self._ensure_reader()
+        backend = self._ensure_backend()
         if image is None or image.size == 0:
             return []
 
@@ -90,34 +102,15 @@ class OcrEngine:
         if img.size == 0:
             return []
 
-        output = reader(img)
-        # rapidocr v3.x returns RapidOCROutput object
-        if hasattr(output, 'boxes'):
-            boxes = output.boxes
-            txts = output.txts
-            scores = output.scores
-            if boxes is None or len(boxes) == 0:
-                return []
-            raw = list(zip(boxes, txts, scores))
-        else:
-            raw = output
-            if not raw:
-                return []
-
+        raw_results = backend.predict(img)
         blocks = []
-        for box, text, conf in raw:
-            if box is None or (isinstance(box, (list, tuple)) and len(box) == 0) or (hasattr(box, 'shape') and box.size == 0):
-                continue
-            try:
-                conf_f = float(conf) if conf is not None else 0.0
-            except (ValueError, TypeError):
-                conf_f = 0.0
-            if conf_f < min_confidence:
+        for raw in raw_results:
+            if raw.confidence < min_confidence:
                 continue
             block = TextBlock(
-                text=str(text),
-                confidence=conf_f,
-                box=[(float(p[0]), float(p[1])) for p in box],
+                text=raw.text,
+                confidence=raw.confidence,
+                box=raw.box,
             )
             if region:
                 block.cx += region[0]

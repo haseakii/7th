@@ -233,6 +233,9 @@ def test_safe_stop_does_not_interrupt_purchase(num_items):
     bot._calibrate_before_loop = MagicMock()
     bot._scroll_to_top = MagicMock()
 
+    # Skip scene validation to focus on stop-not-interrupting behavior
+    bot._ensure_secret_shop = MagicMock(return_value=True)
+
     # Make check_resources / should_continue always want to continue
     bot.check_resources = MagicMock(return_value=True)
     bot.refresh_shop = MagicMock(return_value=True)
