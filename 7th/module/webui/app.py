@@ -16,7 +16,6 @@ from pywebio import config as webconfig
 from pywebio.output import (
     put_button,
     put_buttons,
-    put_collapse,
     put_html,
     put_scope,
     put_text,
@@ -90,8 +89,12 @@ class E7GUI(Frame):
         add_css(filepath_css("dark.css"))
         self.set_aside()
         self.set_menu()
+        self._on_initial_content()
 
-    # ── Aside ──────────────────────────────────────────────────────
+    def _on_initial_content(self) -> None:
+        """在 ROOT 作用域中渲染初始内容（修复 scope 嵌套问题）。"""
+        with use_scope("ROOT"):
+            self.set_overview()
 
     @use_scope("aside", clear=True)
     def set_aside(self) -> None:
@@ -120,8 +123,14 @@ class E7GUI(Frame):
                 [
                     {"label": name, "value": name, "color": "aside"},
                 ],
-                onclick=self.set_menu,
+                onclick=lambda n=name: self._on_aside_click(n),
             )
+
+    def _on_aside_click(self, name: str) -> None:
+        """aside 按钮回调：切换菜单 + 在 ROOT 作用域显示总览。"""
+        self.set_menu(name)
+        with use_scope("ROOT"):
+            self.set_overview()
 
     # ── Menu ───────────────────────────────────────────────────────
 
@@ -140,28 +149,30 @@ class E7GUI(Frame):
             onclick=[self.set_overview],
         ).style("--menu-overview--")
 
-        # 可折叠任务区
+        # 可折叠任务区（用 put_html + use_scope 避免 put_collapse 的 [object Object] 问题）
         for menu_key, menu_data in self.MENU.items():
             if menu_data.get("menu") != "collapse":
                 continue
             tasks = menu_data.get("tasks", [])
-            content = []
-            for t in tasks:
-                parts = t.split(".")
-                label = parts[-1] if len(parts) >= 2 else t
-                content.append(
+            put_html(
+                f'<details>'
+                f'<summary style="text-transform: none; font-weight: 600; '
+                f'cursor: pointer; padding: 10px 16px; font-size: 13px; '
+                f'color: #a6adc8; letter-spacing: 1px; outline: none;">'
+                f'{menu_key}</summary>'
+                f'<div id="pywebio-scope-collapse-{menu_key}"></div>'
+                f'</details>'
+            )
+            with use_scope(f"collapse-{menu_key}"):
+                for t in tasks:
+                    parts = t.split(".")
+                    label = parts[-1] if len(parts) >= 2 else t
                     put_buttons(
                         [{"label": label, "value": t, "color": "menu"}],
                         onclick=self.set_group,
                     ).style(f"--menu-{t}--")
-                )
-            put_collapse(
-                title=put_text(menu_key).style("text-transform: none; font-weight: 600;"),
-                content=content,
-            )
 
-        # 默认选中总览
-        self.set_overview()
+        # 默认选中总览（由 initial() 或 aside 按钮回调触发）
 
     # ── Group (配置表单) ───────────────────────────────────────────
     # ALAS 风格：pin 命名 {task}_{group}_{arg}
@@ -242,20 +253,28 @@ class E7GUI(Frame):
                         pin_name = f"{task_name}_{group_name[0]}_{arg_name[0]}"
                         path = f"{task_name}.{group_name[0]}.{arg_name[0]}"
                         raw = pin[pin_name]
+
                         # 类型转换
                         if arg_def["type"] == "checkbox":
                             value = bool(raw)
+                        elif arg_def["type"] == "select":
+                            value = raw
                         elif arg_def["type"] == "input":
-                            if isinstance(raw, str):
-                                try:
-                                    value = int(raw) if raw.isdigit() else float(raw)
-                                except (ValueError, TypeError):
-                                    value = raw
+                            if raw == "" or raw is None:
+                                value = arg_def.get("value", "")
                             else:
-                                value = raw
+                                try:
+                                    value = int(raw)
+                                except ValueError:
+                                    try:
+                                        value = float(raw)
+                                    except ValueError:
+                                        value = raw
                         else:
                             value = raw
-                        self.config.set(path, value)
+
+                        self.config.modified[path] = value
+
             self.config.update()
             logger.info("配置已保存")
         except Exception as e:

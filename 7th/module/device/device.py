@@ -102,16 +102,33 @@ class DeviceController:
         logger.error(f"设备连接失败，已重试 {max_retries} 次: {self.serial}")
         return False
 
+    # ── ADB 自动重连 ──────────────────────────────────────────────────
+
+    def _adb_reconnect(self) -> bool:
+        """ADB 操作失败时尝试重连设备。"""
+        logger.warning("ADB 连接异常，尝试重连...")
+        return self.connect(max_retries=2, retry_delay=3.0)
+
     # ── 截图 ──────────────────────────────────────────────────────────────────
 
     def screenshot(self) -> np.ndarray:
-        """截取 1280x720 截图。
+        """截取 1280x720 截图（含掉线自动重连）。
 
         Returns:
             np.ndarray: BGR 格式的截图数组
         """
         self._ensure_screenshot()
-        image = self._screenshot_strategy.screenshot()
+        for attempt in range(3):
+            try:
+                image = self._screenshot_strategy.screenshot()
+                break
+            except (RuntimeError, subprocess.TimeoutExpired) as e:
+                if attempt < 2:
+                    logger.warning(f"截图失败 (第 {attempt+1} 次): {e}")
+                    if not self._adb_reconnect():
+                        raise
+                    continue
+                raise
 
         # 确保分辨率为 1280x720（横向）
         h, w = image.shape[:2]
@@ -167,7 +184,17 @@ class DeviceController:
 
     def _click_xy(self, x: int, y: int) -> None:
         self._ensure_control()
-        self._control_strategy.click(x, y)
+        for attempt in range(3):
+            try:
+                self._control_strategy.click(x, y)
+                return
+            except (RuntimeError, subprocess.TimeoutExpired) as e:
+                if attempt < 2:
+                    logger.warning(f"点击失败 (第 {attempt+1} 次): {e}")
+                    if not self._adb_reconnect():
+                        raise
+                    continue
+                raise
 
     def _click_adb(self, x: int, y: int) -> None:
         """通过 ADB input tap 点击（向后兼容包装）。"""
@@ -194,7 +221,7 @@ class DeviceController:
     # ── 滑动 ──────────────────────────────────────────────────────────────────
 
     def swipe(self, start: Tuple[int, int], end: Tuple[int, int], duration: float = 0.3) -> None:
-        """从 start 滑动到 end。
+        """从 start 滑动到 end（含掉线自动重连）。
 
         Args:
             start: 起始坐标 (x, y)
@@ -205,7 +232,17 @@ class DeviceController:
         ex, ey = int(end[0]), int(end[1])
         logger.info(f"滑动 ({sx}, {sy}) -> ({ex}, {ey}), 时长 {duration}s")
         self._ensure_control()
-        self._control_strategy.swipe(sx, sy, ex, ey, duration)
+        for attempt in range(3):
+            try:
+                self._control_strategy.swipe(sx, sy, ex, ey, duration)
+                return
+            except (RuntimeError, subprocess.TimeoutExpired) as e:
+                if attempt < 2:
+                    logger.warning(f"滑动失败 (第 {attempt+1} 次): {e}")
+                    if not self._adb_reconnect():
+                        raise
+                    continue
+                raise
 
     def _swipe_adb(self, sx: int, sy: int, ex: int, ey: int, duration: float) -> None:
         """通过 ADB input swipe 滑动（向后兼容包装）。"""

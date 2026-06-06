@@ -33,7 +33,7 @@ def run():
 
     logger.info(f"启动 WebUI: http://{args.host}:{args.port}")
 
-    from fastapi import FastAPI, Response
+    from fastapi import FastAPI
     from fastapi.responses import PlainTextResponse
     from pywebio.platform.fastapi import asgi_app
     from module.webui import app as webui_app

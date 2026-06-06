@@ -61,15 +61,18 @@ class Frame(Base):
         put_text(text)
 
     @staticmethod
-    def init_aside(name: str = None) -> None:
-        if name:
-            Frame.active_button("aside", name)
+    def collapse_menu() -> None:
+        run_js(f"""
+            $("#pywebio-scope-menu").addClass("container-menu-collapsed");
+            $(".container-content-collapsed").removeClass("container-content-collapsed");
+        """)
 
     @staticmethod
-    def init_menu(name: str = None) -> None:
-        clear("content")
-        if name:
-            Frame.active_button("menu", name)
+    def expand_menu() -> None:
+        run_js(f"""
+            $(".container-menu-collapsed").removeClass("container-menu-collapsed");
+            $("#pywebio-scope-content").addClass("container-content-collapsed");
+        """)
 
     @staticmethod
     def active_button(position: str, value: str) -> None:

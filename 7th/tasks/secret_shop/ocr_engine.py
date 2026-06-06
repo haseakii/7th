@@ -5,7 +5,7 @@ OCR 引擎封装 — 支持多种后端
 默认使用 RapidOCR，可通过 set_backend() 切换到其他后端。
 
 典型用途:
-  >>> from shop.ocr_engine import OCR
+  >>> from tasks.secret_shop.ocr_engine import OCR
   >>> text_blocks = OCR.read(img)                     # 整图 OCR
   >>> text_blocks = OCR.read(img, region=(x1,y1,x2,y2))  # 指定区域
   >>> digit_blocks = OCR.read_digits(img, region=...)     # 只取数字

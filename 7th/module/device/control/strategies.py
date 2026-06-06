@@ -25,19 +25,27 @@ class AdbControl(ControlStrategy):
         return "adb"
 
     def click(self, x: int, y: int) -> None:
-        subprocess.run(
+        result = subprocess.run(
             [ADB_EXECUTABLE, "-s", self.serial, "shell", "input", "tap",
              str(x), str(y)],
             capture_output=True, timeout=10
         )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"ADB 点击失败: {result.stderr.decode(errors='ignore')[:200]}"
+            )
 
     def swipe(self, sx: int, sy: int, ex: int, ey: int, duration: float) -> None:
         duration_ms = int(duration * 1000)
-        subprocess.run(
+        result = subprocess.run(
             [ADB_EXECUTABLE, "-s", self.serial, "shell", "input", "swipe",
              str(sx), str(sy), str(ex), str(ey), str(duration_ms)],
             capture_output=True, timeout=10
         )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"ADB 滑动失败: {result.stderr.decode(errors='ignore')[:200]}"
+            )
 
 
 @register("uiautomator2")
