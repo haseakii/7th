@@ -7,6 +7,18 @@ OCR RPC 客户端（本地模式）
 from module.logger import logger
 
 
+# ── OCR RPC 服务进程管理（E7 存根） ──
+
+def start_ocr_server_process(port: int = 22268) -> None:
+    """启动 OCR RPC 服务进程（E7 本地模式，无需启动）。"""
+    logger.debug(f"OCR RPC server start skipped (local mode, port={port})")
+
+
+def stop_ocr_server_process() -> None:
+    """停止 OCR RPC 服务进程。"""
+    pass
+
+
 class ModelProxy:
     """本地 OCR 模型代理，直接从 models.py 加载模型。"""
 

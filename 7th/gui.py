@@ -15,6 +15,16 @@ import os
 import sys
 import threading
 
+# ── 修复 sys.path：优先使用 .venv 的包，避免与 ALAS toolkit 冲突 ──
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_DIR = os.path.dirname(_SCRIPT_DIR)  # D:\software\7th
+_VENV_SITE = os.path.join(_PROJECT_DIR, '.venv', 'Lib', 'site-packages')
+if os.path.isdir(_VENV_SITE):
+    # 将 venv site-packages 移到 sys.path 最前面
+    if _VENV_SITE in sys.path:
+        sys.path.remove(_VENV_SITE)
+    sys.path.insert(0, _VENV_SITE)
+
 from module.logger import logger
 
 
@@ -35,12 +45,13 @@ def run():
 
     from fastapi import FastAPI
     from fastapi.responses import PlainTextResponse
-    from pywebio.platform.fastapi import asgi_app
     from module.webui import app as webui_app
 
+    # webui_app.app 是 module.webui.fastapi.asgi_app 返回的 Starlette ASGI 应用
+    # 直接挂载到 FastAPI 下
     fastapi_app = FastAPI(title="E7 Shop Bot")
 
-    # 停止服务 API（用 middleware 确保不被 PyWebIO mount 拦截）
+    # 停止服务 API
     @fastapi_app.middleware("http")
     async def _shutdown_middleware(request, call_next):
         if request.url.path == "/api/shutdown" and request.method == "POST":
@@ -50,14 +61,9 @@ def run():
         return await call_next(request)
 
     # PyWebIO 页面路由
-    fastapi_app.mount(
-        "/",
-        asgi_app(
-            webui_app.app,
-            cdn=False,
-            allowed_origins=["*"],
-        ),
-    )
+    # app() 函数解析参数并返回 Starlette ASGI 应用
+    asgi_app = webui_app.app()
+    fastapi_app.mount("/", asgi_app)
 
     uvicorn.run(fastapi_app, host=args.host, port=args.port, log_level="info")
 

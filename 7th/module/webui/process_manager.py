@@ -1,61 +1,264 @@
-"""
-ProcessManager — 后台任务子进程管理
-
-管理 ShopBot 任务进程的启动、停止与状态查询。
-"""
-
+import argparse
+import os
 import queue
 import threading
 from multiprocessing import Process
-from typing import Dict, Optional
+from typing import Dict, List, Union
+
+import inflection
+from rich.console import Console, ConsoleRenderable
+
+# Since this file does not run under the same process or subprocess of app.py
+# the following code needs to be repeated
+# Import fake module before import pywebio to avoid importing unnecessary module PIL
+from module.webui.fake_pil_module import *
+
+import_fake_pil_module()
+
+from module.logger import logger, set_file_logger, set_func_logger
+from module.submodule.submodule import load_mod
+from module.submodule.utils import get_available_func, get_available_mod, get_available_mod_func, get_config_mod, \
+    get_func_mod, list_mod_instance
+from module.webui.setting import State
 
 
 class ProcessManager:
-    """管理单个配置实例的任务进程。"""
+    _processes: Dict[str, "ProcessManager"] = {}
 
-    _instances: Dict[str, "ProcessManager"] = {}
-
-    def __init__(self, config_name: str = "default"):
+    def __init__(self, config_name: str = "alas") -> None:
         self.config_name = config_name
-        self._process: Optional[Process] = None
-        self._state = 0  # 0=stopped, 1=running, 2=error
-        self._log_queue: queue.Queue = queue.Queue()
+        self._renderable_queue: queue.Queue[ConsoleRenderable] = State.manager.Queue()
+        self.renderables: List[ConsoleRenderable] = []
+        self.renderables_max_length = 400
+        self.renderables_reduce_length = 80
+        self._process: Process = None
+        self._process_locks: Dict[str, threading.Lock] = {}
+        self.thd_log_queue_handler: threading.Thread = None
 
-    @classmethod
-    def get_manager(cls, config_name: str) -> "ProcessManager":
-        """获取或创建实例管理器。"""
-        if config_name not in cls._instances:
-            cls._instances[config_name] = cls(config_name)
-        return cls._instances[config_name]
+    def start(self, func, ev: threading.Event = None) -> None:
+        # 在后台线程启动子进程，避免 multiprocessing spawn 阻塞事件循环
+        def _start_worker():
+            with self._process_locks.setdefault(self.config_name, threading.Lock()):
+                if not self.alive:
+                    if func is None:
+                        _func = get_config_mod(self.config_name)
+                    else:
+                        _func = func
+                    self._process = Process(
+                        target=ProcessManager.run_process,
+                        args=(
+                            self.config_name,
+                            _func,
+                            self._renderable_queue,
+                            ev,
+                        ),
+                    )
+                    self._process.start()
+                    self.start_log_queue_handler()
 
-    @property
-    def state(self) -> int:
-        """返回进程状态: 0=stopped, 1=running, 2=error"""
-        if self._process is not None and not self._process.is_alive():
-            self._state = 0 if self._process.exitcode == 0 else 2
-            self._process = None
-        return self._state
+        threading.Thread(target=_start_worker, daemon=True).start()
+
+    def start_log_queue_handler(self):
+        if (
+            self.thd_log_queue_handler is not None
+            and self.thd_log_queue_handler.is_alive()
+        ):
+            return
+        self.thd_log_queue_handler = threading.Thread(
+            target=self._thread_log_queue_handler
+        )
+        self.thd_log_queue_handler.start()
+
+    def stop(self) -> None:
+        try:
+            lock = self._process_locks[self.config_name]
+        except KeyError:
+            lock = threading.Lock()
+            self._process_locks[self.config_name] = lock
+
+        with lock:
+            if self.alive:
+                self._process.kill()
+                self.renderables.append(
+                    f"[{self.config_name}] exited. Reason: Manual stop\n"
+                )
+            if self.thd_log_queue_handler is not None:
+                self.thd_log_queue_handler.join(timeout=1)
+                if self.thd_log_queue_handler.is_alive():
+                    logger.warning(
+                        "Log queue handler thread does not stop within 1 seconds"
+                    )
+        logger.info(f"[{self.config_name}] exited")
+
+    def _thread_log_queue_handler(self) -> None:
+        while self.alive:
+            try:
+                log = self._renderable_queue.get(timeout=1)
+            except queue.Empty:
+                continue
+            self.renderables.append(log)
+            if len(self.renderables) > self.renderables_max_length:
+                self.renderables = self.renderables[self.renderables_reduce_length :]
+        logger.info("End of log queue handler loop")
 
     @property
     def alive(self) -> bool:
-        return self.state == 1
+        if self._process is not None:
+            return self._process.is_alive()
+        else:
+            return False
 
-    def start(self, func, ev: threading.Event = None) -> None:
-        """启动后台任务进程。"""
+    @property
+    def state(self) -> int:
         if self.alive:
-            return
-        self._process = Process(
-            target=func,
-            args=(self.config_name, ev),
-            daemon=True,
-        )
-        self._process.start()
-        self._state = 1
+            return 1
+        elif len(self.renderables) == 0:
+            return 2
+        else:
+            console = Console(no_color=True)
+            with console.capture() as capture:
+                console.print(self.renderables[-1])
+            s = capture.get().strip()
+            if s.endswith("Reason: Manual stop"):
+                return 2
+            elif s.endswith("Reason: Finish"):
+                return 2
+            elif s.endswith("Reason: Update"):
+                return 4
+            else:
+                return 3
 
-    def stop(self) -> None:
-        """停止后台任务进程。"""
-        if self._process is not None and self._process.is_alive():
-            self._process.kill()
-            self._process.join(timeout=3)
-        self._process = None
-        self._state = 0
+    @classmethod
+    def get_manager(cls, config_name: str) -> "ProcessManager":
+        """
+        Create a new alas if not exists.
+        """
+        if config_name not in cls._processes:
+            cls._processes[config_name] = ProcessManager(config_name)
+        return cls._processes[config_name]
+
+    @staticmethod
+    def run_process(
+        config_name, func: str, q: queue.Queue, e: threading.Event = None
+    ) -> None:
+        # Fix sys.path for subprocess - only remove ALAS toolkit from path
+        import os as _os
+        import sys as _sys
+        _script_dir = _os.path.dirname(_os.path.abspath(__file__))
+        # __file__ = D:\software\7th\7th\module\webui\process_manager.py
+        # 需要上到 D:\software\7th（仓库根目录，包含 .venv/ 和 AzurLaneAutoScript/）
+        _repo_root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_script_dir))))
+        _toolkit_site = _os.path.normpath(
+            _os.path.join(_repo_root, 'AzurLaneAutoScript', 'toolkit', 'Lib', 'site-packages')
+        )
+        # Remove ALAS toolkit paths to avoid package version conflicts
+        _sys.path = [p for p in _sys.path if _toolkit_site not in _os.path.normpath(p)]
+        # Prepend .venv site-packages so .venv packages take priority
+        _venv_site = _os.path.normpath(
+            _os.path.join(_repo_root, '.venv', 'Lib', 'site-packages')
+        )
+        if _os.path.isdir(_venv_site):
+            if _venv_site in _sys.path:
+                _sys.path.remove(_venv_site)
+            _sys.path.insert(0, _venv_site)
+        del _os, _sys, _script_dir, _repo_root, _toolkit_site, _venv_site
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--electron", action="store_true", help="Runs by electron client."
+        )
+        args, _ = parser.parse_known_args()
+        State.electron = args.electron
+
+        # Setup logger
+        set_file_logger(name=config_name)
+        if State.electron:
+            # https://github.com/LmeSzinc/AzurLaneAutoScript/issues/2051
+            logger.info("Electron detected, remove log output to stdout")
+            from module.logger import console_hdlr
+            logger.removeHandler(console_hdlr)
+        set_func_logger(func=q.put)
+
+        from module.config.config import AzurLaneConfig
+
+        # Remove fake PIL module, because subprocess will use it
+        remove_fake_pil_module()
+
+        AzurLaneConfig.stop_event = e
+        try:
+            # Run E7 bot
+            if func == "alas" or func == "SecretShop":
+                from alas import E7AutoScript
+
+                if e is not None:
+                    E7AutoScript.stop_event = e
+                e7 = E7AutoScript(config_name=config_name)
+                if e7.init():
+                    e7.run_secret_shop()
+            elif func in get_available_func():
+                from alas import E7AutoScript
+
+                E7AutoScript(config_name=config_name).run(inflection.underscore(func), skip_first_screenshot=True)
+            elif func in get_available_mod():
+                mod = load_mod(func)
+
+                if e is not None:
+                    mod.set_stop_event(e)
+                mod.loop(config_name)
+            elif func in get_available_mod_func():
+                getattr(load_mod(get_func_mod(func)), inflection.underscore(func))(config_name)
+            else:
+                logger.critical(f"No function matched: {func}")
+            logger.info(f"[{config_name}] exited. Reason: Finish\n")
+        except Exception as e:
+            logger.exception(e)
+
+    @classmethod
+    def running_instances(cls) -> List["ProcessManager"]:
+        l = []
+        for process in cls._processes.values():
+            if process.alive:
+                l.append(process)
+        return l
+
+    @staticmethod
+    def restart_processes(
+        instances: List[Union["ProcessManager", str]] = None, ev: threading.Event = None
+    ):
+        """
+        After update and reload, or failed to perform an update,
+        restart all alas that running before update
+        """
+        logger.hr("Restart alas")
+
+        # Load MOD_CONFIG_DICT
+        list_mod_instance()
+
+        if instances is None:
+            instances = []
+
+        _instances = set()
+
+        for instance in instances:
+            if isinstance(instance, str):
+                _instances.add(ProcessManager.get_manager(instance))
+            elif isinstance(instance, ProcessManager):
+                _instances.add(instance)
+
+        try:
+            with open("./config/reloadalas", mode="r") as f:
+                for line in f.readlines():
+                    line = line.strip()
+                    _instances.add(ProcessManager.get_manager(line))
+        except FileNotFoundError:
+            pass
+
+        for process in _instances:
+            logger.info(f"Starting [{process.config_name}]")
+            process.start(func=get_config_mod(process.config_name), ev=ev)
+
+        try:
+            os.remove("./config/reloadalas")
+        except:
+            pass
+        logger.info("Start alas complete")

@@ -15,11 +15,11 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from log import logger
+from module.logger import logger
 from module.config.config_generated import GeneratedConfig
 from module.config.config_manual import ManualConfig
 from module.config.config_updater import ConfigUpdater, filepath_config
-from module.config.config_watcher import ConfigWatcher
+from module.config.watcher import ConfigWatcher
 from module.config.deep import deep_get, deep_set
 
 
@@ -54,7 +54,7 @@ PREFIX_MAP = {
 }
 
 
-class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher):
+class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
     """E7 配置管理器。
 
     同时兼容两种用法:
@@ -63,6 +63,8 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher):
 
     ALAS 兼容接口:
       cfg.serial, cfg.screenshot_method, cfg.control_method
+
+    使用 ALAS ConfigWatcher 检测文件外部变更。
     """
 
     stop_event: threading.Event = None
@@ -80,16 +82,30 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher):
         ConfigUpdater.__init__(self, config_name=config_name)
         ManualConfig.__init__(self)
         GeneratedConfig.__init__(self)
-        ConfigWatcher.__init__(self)
 
         self._lock = threading.RLock()
         self._bound = {}  # 属性名 → 路径映射
+        self._watcher_stop = threading.Event()
 
         # 建立属性绑定
         self._bind_attrs()
 
-        # 启动文件监听
-        self.start_watcher(on_change=self._reload)
+        # 启动 ALAS ConfigWatcher（后台轮询线程）
+        self._watcher = ConfigWatcher()
+        self._watcher.config_name = config_name
+        self._watcher.start_watching()
+        self._start_watcher_thread()
+
+    def _start_watcher_thread(self) -> None:
+        """启动后台线程轮询配置文件变更。"""
+        def _watch():
+            while not self._watcher_stop.is_set():
+                if self._watcher.should_reload():
+                    self._reload()
+                self._watcher_stop.wait(2)
+
+        t = threading.Thread(target=_watch, name='ConfigWatcher', daemon=True)
+        t.start()
 
     def _bind_attrs(self) -> None:
         """将 ARG_MAP 中的属性绑定到 ConfigUpdater 的数据路径。"""
@@ -125,8 +141,7 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher):
     def __setattr__(self, key: str, value: Any):
         """支持通过属性名写入配置值。"""
         if key in ('data', 'modified', 'auto_update', '_lock', '_bound',
-                   'config_name', 'stop_event', '_watcher_thread', '_stop_event',
-                   '_last_mtime', '_on_change'):
+                   'config_name', 'stop_event', '_watcher', '_watcher_stop'):
             super().__setattr__(key, value)
             return
 
@@ -229,3 +244,85 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher):
     @property
     def is_actual_task(self):
         return True
+
+
+class Function:
+    """ALAS Function 存根 — 表示调度系统中的一个可运行任务。
+
+    WebUI scheduler overview 使用此类获取待运行/等待任务列表。
+    E7 当前只有 SecretShop 一个任务。
+    """
+
+    def __init__(self, name: str, command: str = "", next_run: str = ""):
+        self.name = name
+        self.command = command
+        self.next_run = next_run
+
+
+class AzurLaneConfig(E7Config):
+    """ALAS AzurLaneConfig 存根 — WebUI 兼容层。
+
+    扩展 E7Config 提供 ALAS 调度器接口，使 ALAS WebUI 可正常运行。
+    E7 当前只有 SecretShop 任务，调度器返回固定值。
+    """
+
+    def __init__(self, config_name: str = 'template'):
+        super().__init__(config_name=config_name)
+
+    def load(self) -> None:
+        """加载配置（E7Config 已在 __init__ 中加载）。"""
+        pass
+
+    @property
+    def pending_task(self) -> list:
+        """待运行任务列表。"""
+        return []
+
+    @property
+    def waiting_task(self) -> list:
+        """等待中的任务列表。"""
+        return [Function('SecretShop', 'SecretShop', '')]
+
+    def get_next_task(self) -> Optional[Function]:
+        """获取下一个要运行的任务。"""
+        return Function('SecretShop', 'SecretShop', '')
+
+    def get_next(self) -> Optional[Function]:
+        """别名，兼容不同 ALAS 版本。"""
+        return self.get_next_task()
+
+    def read_file(self, config_name: str, is_template: bool = False) -> dict:
+        """读取配置文件。
+
+        Args:
+            config_name: 配置名（如 'default'）
+            is_template: 是否为模板（忽略）
+
+        Returns:
+            dict: 配置数据
+        """
+        from module.config.utils import filepath_config, read_file
+        return read_file(filepath_config(config_name))
+
+    @staticmethod
+    def write_file(config_name: str, data: dict, mod_name: str = 'alas') -> None:
+        """写入配置文件。
+
+        Args:
+            config_name: 配置名
+            data: 配置数据
+            mod_name: mod 名称（忽略）
+        """
+        from module.config.utils import filepath_config, write_file
+        write_file(filepath_config(config_name), data)
+
+    @staticmethod
+    def save_callback(key: str, value) -> list:
+        """ALAS 兼容的保存回调。
+
+        E7 不需要额外的自动保存逻辑（如 ALAS 的 "un" 过期处理）。
+
+        Returns:
+            list: 空的 (key, value) 列表
+        """
+        return []

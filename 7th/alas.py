@@ -13,7 +13,7 @@ E7AutoScript — 第七史诗 ALAS 风格主调度器
 import threading
 from typing import Optional
 
-from log import logger
+from module.logger import logger
 from module.config.config import E7Config
 from module.device.device import DeviceController
 

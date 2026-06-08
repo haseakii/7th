@@ -2,12 +2,14 @@
 OCR 后端具体实现
 """
 
+import os
 import time
 
 import cv2
 import numpy as np
 
-from log import logger
+from module.logger import logger
+from module.device.alas_paths import CNOCR_MODEL_DIR
 from tasks.secret_shop.ocr_backends.base import BaseOcrBackend, OcrRawResult
 from tasks.secret_shop.ocr_backends import register
 
@@ -153,6 +155,72 @@ class PaddleOcrBackend(BaseOcrBackend):
             results.append(OcrRawResult(
                 text=str(text),
                 confidence=float(conf),
+                box=box,
+            ))
+        return results
+
+
+@register("alas")
+class AlasOcrBackend(BaseOcrBackend):
+    """ALAS 原生 OCR 后端（cnocr densenet-lite-gru），轻量游戏界面专用。
+
+    复用 ALAS `bin/cnocr_models/cnocr/` 模型文件。
+    适合英文/数字识别；中文识别使用 cnocr 通用模型（含 6426 字符）。
+    """
+
+    def __init__(self):
+        self._reader = None
+        self._model_name = None
+
+    def initialize(self) -> float:
+        from cnocr import CnOcr
+        t0 = time.perf_counter()
+
+        model_dir = CNOCR_MODEL_DIR if os.path.isdir(CNOCR_MODEL_DIR) else None
+        if model_dir is None:
+            logger.warning(f"ALAS OCR 模型目录不存在: {CNOCR_MODEL_DIR}，回退到 cnocr 内置模型")
+
+        self._reader = CnOcr(
+            model_name='densenet-lite-gru',
+            model_epoch=39,
+            root=model_dir or None,
+            name='cnocr',
+        )
+        self._model_name = 'alas_cnocr'
+        return time.perf_counter() - t0
+
+    @property
+    def name(self) -> str:
+        return "alas"
+
+    @property
+    def is_available(self) -> bool:
+        try:
+            from cnocr import CnOcr  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    def predict(self, image: np.ndarray) -> list:
+        # CnOcr 需要 RGB 输入
+        if image.shape[2] == 3:
+            rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        else:
+            rgb = image
+        raw = self._reader.ocr(rgb)
+        results = []
+        if not raw:
+            return results
+        for item in raw:
+            text = item['text'] if isinstance(item, dict) else item[0]
+            score = item.get('score', 0) if isinstance(item, dict) else item[1]
+            position = item.get('position', []) if isinstance(item, dict) else item[2]
+            if score is not None and score < 0.3:
+                continue
+            box = [(float(p[0]), float(p[1])) for p in (position or [])]
+            results.append(OcrRawResult(
+                text=str(text),
+                confidence=float(score) if score is not None else 0.0,
                 box=box,
             ))
         return results

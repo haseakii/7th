@@ -13,7 +13,7 @@ SceneManager 场景管理器
 
 import numpy as np
 
-from log import logger
+from module.logger import logger
 from module.base.utils import crop
 from tasks.secret_shop.navigator import (
     CONTENT_BRIGHTNESS_THRESHOLD,

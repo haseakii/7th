@@ -6,7 +6,7 @@ SecretShopTask - 秘密商店自动刷新购买任务
 
 import threading
 
-from log import logger
+from module.logger import logger
 from module.base.base import ModuleBase
 
 

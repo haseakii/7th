@@ -8,7 +8,7 @@ from typing import List
 
 import numpy as np
 
-from log import logger
+from module.logger import logger
 
 
 class ScreenshotStrategy(ABC):

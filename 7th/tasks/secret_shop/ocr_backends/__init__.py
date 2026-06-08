@@ -8,7 +8,7 @@ OCR 不做 auto-benchmark（准确率比速度更重要），由用户手动选�
 import time
 from typing import Dict, List, Optional, Type
 
-from log import logger
+from module.logger import logger
 from tasks.secret_shop.ocr_backends.base import BaseOcrBackend
 
 
@@ -67,9 +67,17 @@ def available_methods() -> List[str]:
     return result
 
 
+# ── 移除 fake PIL 模块 ────────────────────────────────────────────────────
+try:
+    from module.webui.fake_pil_module import remove_fake_pil_module
+    remove_fake_pil_module()
+except ImportError:
+    pass
+
 # ── 导入具体后端触发注册 ──────────────────────────────────────────────────────
 from tasks.secret_shop.ocr_backends.backends import (  # noqa: F401,E402
     RapidOcrBackend,
     EasyOcrBackend,
     PaddleOcrBackend,
+    AlasOcrBackend,
 )

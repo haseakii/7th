@@ -1,38 +1,91 @@
-"""
-State — 全局共享状态单例
-
-存储 WebUI 的运行状态、主题、重启事件等。
-"""
-
+import multiprocessing
 import threading
-from typing import Optional
+from multiprocessing.managers import SyncManager
+from typing import TYPE_CHECKING, Callable, Generic, TypeVar
+
+if TYPE_CHECKING:
+    from module.config.config_updater import ConfigUpdater
+    from module.webui.config import DeployConfig
+
+T = TypeVar("T")
+
+
+class cached_class_property(Generic[T]):
+    """
+    Code from https://github.com/dssg/dickens
+    Add typing support
+
+    Descriptor decorator implementing a class-level, read-only
+    property, which caches its results on the class(es) on which it
+    operates.
+    Inheritance is supported, insofar as the descriptor is never hidden
+    by its cache; rather, it stores values under its access name with
+    added underscores. For example, when wrapping getters named
+    "choices", "choices_" or "_choices", each class's result is stored
+    on the class at "_choices_"; decoration of a getter named
+    "_choices_" would raise an exception.
+    """
+
+    class AliasConflict(ValueError):
+        pass
+
+    def __init__(self, func: Callable[..., T]):
+        self.__func__ = func
+        self.__cache_name__ = '_{}_'.format(func.__name__.strip('_'))
+        if self.__cache_name__ == func.__name__:
+            raise self.AliasConflict(self.__cache_name__)
+
+    def __get__(self, instance, cls=None) -> T:
+        if cls is None:
+            cls = type(instance)
+
+        try:
+            return vars(cls)[self.__cache_name__]
+        except KeyError:
+            result = self.__func__(cls)
+            setattr(cls, self.__cache_name__, result)
+            return result
 
 
 class State:
-    """全局共享状态，所有属性为类变量。"""
+    """
+    Shared settings
+    """
 
-    # 重启事件（由 gui.py 设置）
-    restart_event: Optional[threading.Event] = None
+    _init = False
+    _clearup = False
 
-    # 主题
-    theme: str = "dark"
+    restart_event: threading.Event = None
+    manager: SyncManager = None
+    electron: bool = False
+    theme: str = "default"
 
-    # 部署配置（由 deploy/config.py 设置）
-    deploy_config = None
+    @classmethod
+    def init(cls):
+        cls.manager = multiprocessing.Manager()
+        cls._init = True
 
-    # 日志
-    logger = None
+    @classmethod
+    def clearup(cls):
+        cls.manager.shutdown()
+        cls._clearup = True
 
-    # ShopBot 实例（页面刷新后仍保留）
-    bot = None
+    @cached_class_property
+    def deploy_config(self) -> "DeployConfig":
+        """
+        Returns:
+            DeployConfig：
+        """
+        from module.webui.config import DeployConfig
 
-    # 统计数据缓存（页面刷新后不归零）
-    last_stats = {
-        "total_refreshes": 0,
-        "bookmarks_bought": 0,
-        "mystic_medals_bought": 0,
-        "skystone_remaining": 0,
-    }
+        return DeployConfig()
 
-    # 总览页是否激活（页面刷新时自动关闭旧线程）
-    overview_active: bool = False
+    @cached_class_property
+    def config_updater(self) -> "ConfigUpdater":
+        """
+        Returns:
+            ConfigUpdater：
+        """
+        from module.config.config_updater import ConfigUpdater
+
+        return ConfigUpdater(config_name='default')

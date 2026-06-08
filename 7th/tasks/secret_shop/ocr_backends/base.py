@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from log import logger
+from module.logger import logger
 
 
 @dataclass

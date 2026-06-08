@@ -17,7 +17,7 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 
-from log import logger
+from module.logger import logger
 
 
 @dataclass
@@ -98,7 +98,7 @@ class OcrEngine:
         if image is None or image.size == 0:
             return []
 
-        img = image[region[1]:region[3], region[0]:region[2]] if region else image
+        img = image[region[1]:region[3], region[0]:region[2]].copy() if region else image
         if img.size == 0:
             return []
 

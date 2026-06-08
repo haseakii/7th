@@ -27,8 +27,7 @@ import numpy as np
 # 确保项目根目录在 sys.path 中
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config_manager import ConfigManager, AppConfig
-from log import logger
+from module.logger import logger
 from tasks.secret_shop.navigator import ShopNavigator
 from module.device.device import DeviceController
 
@@ -255,14 +254,13 @@ def calibrate_coordinates(img: np.ndarray):
             print(f"    y={y}: 纹理丰富 (std={row.std():.1f}, mean={row.mean():.1f})")
 
 
-def take_screenshot(config_path: str = "config.yaml"):
+def take_screenshot(config_name: str = "default"):
     """通过 ADB 截取一张新截图"""
     print("正在通过 ADB 截图...")
-    config = ConfigManager(config_path)
-    config.load()
-    cfg = config.get()
+    from module.config.config import E7Config
+    config = E7Config(config_name=config_name)
 
-    device = DeviceController(cfg.device)
+    device = DeviceController(config)
     if not device.connect():
         print("[FAIL] 设备连接失败")
         return None

@@ -1,86 +1,60 @@
 """
-Updater — 基于 Git 的自动更新
+E7 Updater 存根 — ALAS 的 Git 更新检查器，E7 不需要。
 
-定时检查远程更新，执行 git pull + pip install 并重启。
+保留以兼容 WebUI import。提供所有 WebUI 调用的方法存根。
 """
 
+import datetime
 import threading
 import time
-from typing import Optional
+from typing import Generator, List, Tuple
 
-from deploy.git import GitManager
-from deploy.pip import PipManager
-from log import logger
+from module.logger import logger
+from module.webui.utils import TaskHandler
 
 
 class Updater:
-    """自动更新管理器。
+    """E7 更新器存根。"""
 
-    在后台线程中定期检查远程更新，
-    检测到更新后执行 git pull + pip install。
-    """
+    def __init__(self, file=None):
+        self.state = 0
+        self.event: threading.Event = None
+        self.delay = 0
 
-    def __init__(self, config_path: Optional[str] = None):
-        self.git = GitManager(config_path)
-        self.pip = PipManager(config_path)
-        self._stop_event = threading.Event()
-        self._thread: Optional[threading.Thread] = None
-        self._update_available = False
-        self._latest_commit = ""
+        # 兼容属性
+        self.Branch = 'main'
+        self.Repository = ''
 
-    @property
-    def update_available(self) -> bool:
-        return self._update_available
+    @staticmethod
+    def _noop_gen():
+        yield
+        while True:
+            yield
 
-    def start(self, interval: int = 300) -> None:
-        """启动定时检查线程。"""
-        if self._thread and self._thread.is_alive():
-            return
-        self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._check_loop,
-            args=(interval,),
-            daemon=True,
-        )
-        self._thread.start()
-        logger.info(f"更新检查已启动（间隔 {interval}s）")
+    def check_update(self):
+        return self._noop_gen()
 
-    def stop(self) -> None:
-        self._stop_event.set()
-        logger.info("更新检查已停止")
+    def schedule_update(self):
+        return self._noop_gen()
 
-    def _check_loop(self, interval: int) -> None:
-        while not self._stop_event.is_set():
-            try:
-                self.check()
-            except Exception as e:
-                logger.warning(f"更新检查异常: {e}")
-            time.sleep(interval)
+    def run_update(self):
+        """运行更新（E7 存根）。"""
+        pass
 
-    def check(self) -> bool:
-        """检查远程是否有更新。"""
-        if not self.git.fetch():
-            return False
-        has_update = self.git.has_update()
-        if has_update:
-            self._latest_commit = self.git.remote_commit()
-            self._update_available = True
-            logger.info(f"发现新版本: {self._latest_commit[:8]}")
-        return has_update
+    def cancel(self):
+        """取消更新（E7 存根）。"""
+        pass
 
-    def run_update(self) -> bool:
-        """执行更新：git pull → pip install。"""
-        logger.hr("开始更新", level=1)
+    def get_commit(self, branch: str = 'HEAD', short_sha1: bool = True, n: int = 1) -> list:
+        """
+        获取提交信息（E7 存根，返回空数据）。
 
-        if not self.git.pull():
-            logger.error("Git pull 失败")
-            return False
-
-        self.pip.install()
-        self._update_available = False
-        logger.info("更新完成，请重启程序")
-        return True
+        Returns:
+            list of tuples: (sha1, author, time, message) 或 [(sha1, author, time, message)]
+        """
+        if n == 1:
+            return ['—', '—', '—', '—']
+        return [('—', '—', '—', '—')] * n
 
 
-# 模块级单例
 updater = Updater()

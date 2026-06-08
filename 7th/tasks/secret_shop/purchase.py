@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from typing import Dict
 
-from log import logger
+from module.logger import logger
 from module.base.timer import Timer
 from module.device.device import DeviceController
 from tasks.secret_shop.ocr_engine import OCR
@@ -84,14 +84,10 @@ class PurchaseEngine:
         self.device = device
         self._ocr = OCR
 
-        # 兼容旧接口：先接受 config (ConfigManager / E7Config)，再接受 buy_list dict
         if buy_list is not None:
             self._buy_list = buy_list
         elif config is not None:
-            if hasattr(config, 'get_buy_list'):
-                self._buy_list = config.get_buy_list()
-            else:
-                self._buy_list = {}
+            self._buy_list = getattr(config, 'buy_list', {}) or {}
         else:
             self._buy_list = {}
 

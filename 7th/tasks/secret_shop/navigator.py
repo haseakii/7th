@@ -12,7 +12,7 @@ ShopNavigator 商店导航器
 
 import time
 
-from log import logger
+from module.logger import logger
 from module.base.button import Button
 from module.base.timer import Timer
 from module.base.utils import crop

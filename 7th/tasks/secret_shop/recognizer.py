@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-from log import logger
+from module.logger import logger
 from tasks.secret_shop.ocr_engine import OCR
 
 # ---------------------------------------------------------------------------

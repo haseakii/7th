@@ -11,8 +11,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from log import logger
+from module.logger import logger
 from module.config.deep import deep_get, deep_iter, deep_set
+from module.config.utils import filepath_args, write_file as _write_util
 
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / 'config'
@@ -113,3 +114,15 @@ class ConfigUpdater:
 
     def __setitem__(self, key: str, value: Any):
         self.set(key, value)
+
+    @staticmethod
+    def write_file(config_name: str, data: dict, mod_name: str = 'alas') -> None:
+        """写入 JSON 配置文件（ALAS WebUI 兼容接口）。
+
+        Args:
+            config_name: 配置名（如 'default'）
+            data: 配置数据
+            mod_name: mod 名称（E7 固定为 'alas'）
+        """
+        path = filepath_args(config_name, mod_name)
+        _write_util(path, data)

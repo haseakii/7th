@@ -1,103 +1,82 @@
 {
   "SecretShop": {
     "ShopItems": {
-      "_info": {"name": "购买物品"},
       "BuyBookmarks": {
         "type": "checkbox",
-        "value": true,
-        "display": "购买书签"
+        "value": true
       },
       "BuyMysticMedals": {
         "type": "checkbox",
-        "value": true,
-        "display": "购买神秘奖章"
+        "value": true
       },
       "BuyEquipment": {
         "type": "checkbox",
-        "value": false,
-        "display": "购买装备"
+        "value": false
       },
       "BuyFodder": {
         "type": "checkbox",
-        "value": false,
-        "display": "购买狗粮"
+        "value": false
       }
     },
     "RefreshSettings": {
-      "_info": {"name": "刷新设置"},
       "MaxRefreshCount": {
         "type": "input",
-        "value": 200,
-        "display": "最大刷新次数"
+        "value": 200
       },
       "MaxSkystoneSpend": {
         "type": "input",
-        "value": 0,
-        "display": "天空石消耗上限"
+        "value": 0
       }
     },
     "Thresholds": {
-      "_info": {"name": "阈值设置"},
       "GoldThreshold": {
         "type": "input",
-        "value": 0,
-        "display": "金币阈值"
+        "value": 0
       },
       "SkystoneThreshold": {
         "type": "input",
-        "value": 0,
-        "display": "天空石阈值"
+        "value": 0
       }
     },
     "StopConditions": {
-      "_info": {"name": "停止条件"},
       "MaxBookmarks": {
         "type": "input",
-        "value": 0,
-        "display": "书签购买上限"
+        "value": 0
       },
       "MaxMysticMedals": {
         "type": "input",
-        "value": 100,
-        "display": "神秘奖章购买上限"
+        "value": 100
       }
     }
   },
   "Device": {
     "Connection": {
-      "_info": {"name": "连接"},
       "Serial": {
         "type": "input",
-        "value": "127.0.0.1:16384",
-        "display": "设备序列号"
+        "value": "127.0.0.1:16384"
       },
       "ScreenshotMethod": {
         "type": "select",
         "value": "auto",
-        "option": ["auto", "ADB", "ADB_nc", "uiautomator2"],
-        "display": "截图方式"
+        "option": ["auto", "adb", "adb_nc", "uiautomator2", "ascreencap", "ascreencap_nc", "droidcast", "droidcast_raw", "nemu_ipc", "ldopengl"]
       },
       "ControlMethod": {
         "type": "select",
         "value": "auto",
-        "option": ["auto", "ADB", "uiautomator2"],
-        "display": "控制方式"
+        "option": ["auto", "adb", "uiautomator2", "minitouch", "hermit", "maatouch"]
       },
       "OcrMethod": {
         "type": "select",
         "value": "rapidocr",
-        "option": ["rapidocr", "easyocr", "paddleocr"],
-        "display": "OCR 方式"
+        "option": ["rapidocr", "easyocr", "paddleocr", "alas"]
       }
     }
   },
   "Webui": {
     "Server": {
-      "_info": {"name": "服务器"},
       "WebuiPort": {
         "type": "input",
-        "value": 8080,
-        "display": "WebUI 端口"
+        "value": 8080
       }
     }
   }

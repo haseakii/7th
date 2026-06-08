@@ -9,7 +9,7 @@ from typing import Optional
 from deploy.config import DeployConfig
 from deploy.git import GitManager
 from deploy.pip import PipManager
-from log import logger
+from module.logger import logger
 
 
 class Installer:

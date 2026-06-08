@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 from typing import Dict, List, Optional, Tuple
 
-from log import logger
+from module.logger import logger
 
 # Price region (absolute x coordinates in 1280x720 screenshot)
 # Full price area = coin icon + price digits

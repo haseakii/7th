@@ -1,72 +1,92 @@
 """
 DeployConfig — 部署配置
 
-从 config/deploy.yaml 读取 Git/Python/Pip 设置。
+从 config/deploy.yaml 读取 Git/Python/Pip/Ocr/Discord 等设置。
+对应 ALAS DeployConfig，适配 E7 默认值。
 """
 
 from pathlib import Path
 from typing import Optional
 
 
+class ExecutionError(Exception):
+    """执行错误，部署流程中发生异常时抛出。"""
+    pass
+
+
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 
 
 class DeployConfig:
-    """部署配置，管理 Git/Python/Pip/ADB 路径和设置。"""
+    """部署配置，管理 Git/Python/Pip/ADB/OCR/Discord/远程访问等设置。
 
-    def __init__(self, config_path: Optional[str] = None):
-        self._path = Path(config_path) if config_path else CONFIG_DIR / "deploy.yaml"
-        self._data = self._load()
+    使用 __getattr__ / __setattr__ 动态访问 _data 字典，
+    兼容 ALAS webui config 的 __setattr__ 写入模式。
+    """
 
-    # Git
-    @property
-    def Repository(self) -> str:
-        return self._data.get("Repository", "")
+    _CONFIG_KEYS = {
+        'Repository', 'Branch', 'GitExecutable', 'AutoUpdate',
+        'PythonExecutable', 'PypiMirror', 'RequirementsFile',
+        'UseOcrServer', 'StartOcrServer', 'OcrServerPort', 'OcrClientAddress',
+        'EnableReload', 'CheckUpdateInterval', 'AutoRestartTime',
+        'DiscordRichPresence',
+        'EnableRemoteAccess', 'SSHUser', 'SSHServer', 'Password', 'SSHKeyFilename',
+        'WebuiHost', 'WebuiPort', 'Theme', 'Language', 'Run', 'CDN',
+    }
+    _DEFAULTS = {
+        'Repository': '',
+        'Branch': 'main',
+        'GitExecutable': 'git',
+        'AutoUpdate': True,
+        'PythonExecutable': 'python',
+        'PypiMirror': None,
+        'RequirementsFile': 'requirements.txt',
+        'UseOcrServer': False,
+        'StartOcrServer': False,
+        'OcrServerPort': 22268,
+        'OcrClientAddress': '127.0.0.1:22268',
+        'EnableReload': True,
+        'CheckUpdateInterval': 5,
+        'AutoRestartTime': '03:50',
+        'DiscordRichPresence': False,
+        'EnableRemoteAccess': False,
+        'SSHUser': None,
+        'SSHServer': None,
+        'Password': None,
+        'SSHKeyFilename': None,
+        'WebuiHost': '0.0.0.0',
+        'WebuiPort': 8080,
+        'Theme': 'dark',
+        'Language': 'zh-CN',
+        'Run': '',
+        'CDN': False,
+    }
 
-    @property
-    def Branch(self) -> str:
-        return self._data.get("Branch", "main")
+    def __init__(self, config_path: Optional[str] = None, file=None):
+        # 绕过 __setattr__ 设置内部属性
+        object.__setattr__(self, '_path', Path(config_path) if config_path else (
+            Path(file) if file else CONFIG_DIR / 'deploy.yaml'
+        ))
+        object.__setattr__(self, '_data', self._load())
 
-    @property
-    def GitExecutable(self) -> str:
-        return self._data.get("GitExecutable", "git")
+    def __getattr__(self, name: str):
+        if name in self._CONFIG_KEYS:
+            return self._data.get(name, self._DEFAULTS.get(name))
+        raise AttributeError(f"'DeployConfig' has no attribute '{name}'")
 
-    @property
-    def AutoUpdate(self) -> bool:
-        return self._data.get("AutoUpdate", True)
-
-    # Python
-    @property
-    def PythonExecutable(self) -> str:
-        return self._data.get("PythonExecutable", "python")
-
-    @property
-    def PypiMirror(self) -> Optional[str]:
-        return self._data.get("PypiMirror", None)
-
-    @property
-    def RequirementsFile(self) -> str:
-        return self._data.get("RequirementsFile", "requirements.txt")
-
-    # Webui
-    @property
-    def WebuiHost(self) -> str:
-        return self._data.get("WebuiHost", "0.0.0.0")
-
-    @property
-    def WebuiPort(self) -> int:
-        return int(self._data.get("WebuiPort", 8080))
-
-    @property
-    def Theme(self) -> str:
-        return self._data.get("Theme", "dark")
+    def __setattr__(self, name: str, value):
+        if name in self._CONFIG_KEYS:
+            self._data[name] = value
+        else:
+            object.__setattr__(self, name, value)
 
     def _load(self) -> dict:
-        if not self._path.exists():
-            return {}
+        path = object.__getattribute__(self, '_path')
+        if not path.exists():
+            return dict(self._DEFAULTS)
         try:
             import yaml
-            with open(self._path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
+            with open(path, "r", encoding="utf-8") as f:
+                return {**self._DEFAULTS, **(yaml.safe_load(f) or {})}
         except Exception:
-            return {}
+            return dict(self._DEFAULTS)

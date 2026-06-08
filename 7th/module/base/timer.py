@@ -1,10 +1,75 @@
-"""
-Timer 计时器
-
-从 Alas 原样复用的计时器工具。
-"""
-
 from time import time, sleep
+from datetime import datetime, timedelta
+from functools import wraps
+
+
+def timer(function):
+    """
+    Decorator to time a function, for debug only
+    """
+
+    @wraps(function)
+    def function_timer(*args, **kwargs):
+        start = time()
+        result = function(*args, **kwargs)
+        cost = time() - start
+        print(f'{function.__name__}: {cost:.10f} s')
+        return result
+
+    return function_timer
+
+
+def future_time(string):
+    """
+    Args:
+        string (str): Such as 14:59.
+
+    Returns:
+        datetime.datetime: Time with given hour, minute in the future.
+    """
+    hour, minute = [int(x) for x in string.split(':')]
+    future = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
+    future = future + timedelta(days=1) if future < datetime.now() else future
+    return future
+
+
+def past_time(string):
+    """
+    Args:
+        string (str): Such as 14:59.
+
+    Returns:
+        datetime.datetime: Time with given hour, minute in the past.
+    """
+    hour, minute = [int(x) for x in string.split(':')]
+    past = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
+    past = past - timedelta(days=1) if past > datetime.now() else past
+    return past
+
+
+def future_time_range(string):
+    """
+    Args:
+        string (str): Such as 23:30-06:30.
+
+    Returns:
+        tuple(datetime.datetime): (time start, time end).
+    """
+    start, end = [future_time(s) for s in string.split('-')]
+    if start > end:
+        start = start - timedelta(days=1)
+    return start, end
+
+
+def time_range_active(time_range):
+    """
+    Args:
+        time_range(tuple(datetime.datetime)): (time start, time end).
+
+    Returns:
+        bool:
+    """
+    return time_range[0] < datetime.now() < time_range[1]
 
 
 class Timer:
@@ -130,7 +195,12 @@ class Timer:
         if diff > 0:
             sleep(diff)
 
+    def show(self):
+        from module.logger import logger
+        logger.info(str(self))
+
     def __str__(self):
+        # Timer(limit=2.351/3, count=4/6)
         return f'Timer(limit={round(self.current_time(), 3)}/{self.limit}, count={self._access}/{self.count})'
 
     __repr__ = __str__

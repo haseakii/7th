@@ -7,7 +7,7 @@
 
 from typing import Dict, List, Optional, Type
 
-from log import logger
+from module.logger import logger
 from module.device.control.base import ControlStrategy
 
 
@@ -84,5 +84,14 @@ def available_methods() -> List[str]:
     return ["auto"] + sorted(_control_registry.keys())
 
 
+# ── 移除 fake PIL 模块，恢复真实 PIL ──────────────────────────────────────
+try:
+    from module.webui.fake_pil_module import remove_fake_pil_module
+    remove_fake_pil_module()
+except ImportError:
+    pass
+
 # ── 导入具体策略触发注册 ──────────────────────────────────────────────────────
-from module.device.control.strategies import AdbControl, U2Control  # noqa: F401,E402
+from module.device.control.strategies import (  # noqa: F401,E402
+    AdbControl, U2Control, MinitouchControl, HermitControl, MaaTouchControl,
+)

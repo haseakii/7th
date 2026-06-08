@@ -22,7 +22,7 @@
   "Device": {
     "Connection": {
       "Serial": "127.0.0.1:16384",
-      "ScreenshotMethod": "auto",
+      "ScreenshotMethod": "uiautomator2",
       "ControlMethod": "auto",
       "OcrMethod": "rapidocr"
     }

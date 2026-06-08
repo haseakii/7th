@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from deploy.config import DeployConfig
-from log import logger
+from module.logger import logger
 
 
 class PipManager(DeployConfig):

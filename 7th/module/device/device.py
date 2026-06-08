@@ -11,12 +11,23 @@ import threading
 import time
 from typing import Optional, Tuple
 
-import cv2
-import numpy as np
-
-from log import logger, save_error_screenshot
+from module.logger import logger, save_error_screenshot
 from module.base.utils import random_rectangle_point
 from module.device.adb_utils import ADB_EXECUTABLE
+
+# cv2/numpy 按需导入（避免 ALAS toolkit 版本冲突）
+cv2 = None
+np = None
+
+
+def _ensure_cv2():
+    global cv2, np
+    if cv2 is not None:
+        return
+    import cv2 as _cv2
+    import numpy as _np
+    cv2 = _cv2
+    np = _np
 
 
 class DeviceController:
@@ -33,7 +44,7 @@ class DeviceController:
         self.serial = raw if raw and str(raw) != 'None' else '127.0.0.1:16384'
         self.screenshot_method: str = getattr(config, 'screenshot_method', None) or getattr(config, 'device_screenshot_method', 'ADB')
         self.control_method: str = getattr(config, 'control_method', None) or getattr(config, 'device_control_method', 'ADB')
-        self.image: Optional[np.ndarray] = None
+        self.image: Optional['np.ndarray'] = None
 
         # 策略实例（懒初始化，首次 screenshot/click 时创建）
         self._screenshot_strategy = None
@@ -111,12 +122,13 @@ class DeviceController:
 
     # ── 截图 ──────────────────────────────────────────────────────────────────
 
-    def screenshot(self) -> np.ndarray:
+    def screenshot(self) -> 'np.ndarray':
         """截取 1280x720 截图（含掉线自动重连）。
 
         Returns:
             np.ndarray: BGR 格式的截图数组
         """
+        _ensure_cv2()
         self._ensure_screenshot()
         for attempt in range(3):
             try:
@@ -143,7 +155,7 @@ class DeviceController:
 
     # ── 向后兼容的旧截图方法（供子类重写或外部直接调用） ──────────────────
 
-    def _screenshot_adb(self) -> np.ndarray:
+    def _screenshot_adb(self) -> 'np.ndarray':
         """通过 ADB screencap 截图（向后兼容包装）。"""
         self._ensure_screenshot()
         from module.device.screenshot.strategies import AdbScreenshot
@@ -154,7 +166,7 @@ class DeviceController:
         tmp.initialize()
         return tmp.screenshot()
 
-    def _screenshot_u2(self) -> np.ndarray:
+    def _screenshot_u2(self) -> 'np.ndarray':
         """通过 uiautomator2 截图（向后兼容包装）。"""
         self._ensure_screenshot()
         from module.device.screenshot.strategies import U2Screenshot
@@ -274,3 +286,7 @@ class DeviceController:
             logger.warning("无可用截图，跳过错误截图保存")
             return ""
         return save_error_screenshot(self.image, name=name)
+
+
+# ALAS 兼容别名
+Device = DeviceController

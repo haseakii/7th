@@ -17,7 +17,7 @@ import numpy as np
 from types import SimpleNamespace
 from typing import Dict, Union
 
-from log import logger
+from module.logger import logger
 from module.base.timer import Timer
 from module.device.device import DeviceController
 from tasks.secret_shop.navigator import ShopNavigator
@@ -70,19 +70,13 @@ class RunStatistics:
 class ShopBot:
     """商店自动刷新购买主控类。
 
-    接受 ConfigManager、E7Config 或 AppConfig 兼容对象作为配置。
-    内部统一为 _cfg 对象，暴露 device / shop 两级属性（兼容旧风格）。
+    接受 E7Config 作为配置，内部统一为 _cfg 对象。
     """
 
     @staticmethod
     def _normalize_config(config) -> SimpleNamespace:
         """统一不同配置类型为 _(cfg).device / .shop 访问方式。"""
-        # 已经是 SimpleNamespace/AppConfig 风格的对象（非空，防止误配 E7Config 默认属性）
-        if hasattr(config, 'device') and hasattr(config, 'shop') and config.device is not None and config.shop is not None:
-            return config
-
-        # E7Config → 映射为 SimpleNamespace（必须在 ConfigManager 之前，
-        # 因为 E7Config 也继承 .get() 但需要 key 参数）
+        # E7Config → 映射为 SimpleNamespace
         if hasattr(config, 'BuyBookmarks'):
             from module.config.config import E7Config
             if isinstance(config, E7Config):
@@ -107,11 +101,9 @@ class ShopBot:
                     ),
                 )
 
-        # ConfigManager → .get() 返回 AppConfig
-        if hasattr(config, 'get') and callable(config.get):
-            cfg = config.get()
-            if hasattr(cfg, 'device') and hasattr(cfg, 'shop'):
-                return cfg
+        # fallback: 裸 SimpleNamespace 或 AppConfig
+        if hasattr(config, 'device') and hasattr(config, 'shop') and config.device is not None and config.shop is not None:
+            return config
 
         # fallback: 裸 dict
         return config
@@ -166,6 +158,16 @@ class ShopBot:
     def stop(self) -> None:
         logger.info("ShopBot 收到停止请求，将在当前循环结束后停止")
         self._stop_event.set()
+
+    def _cleanup_memory(self) -> None:
+        """定期内存清理：GC + OpenCV 缓冲。"""
+        import gc
+        gc.collect()
+        try:
+            import cv2
+            cv2.setNumThreads(0)
+        except Exception:
+            pass
 
     @property
     def alive(self) -> bool:
@@ -428,9 +430,9 @@ class ShopBot:
                     self.stats.skystone_remaining -= SKYSTONE_PER_REFRESH
                     self._skystone_check_counter += 1
 
-                    # 每 50 轮强制 GC，清理 OCR/OpenCV 中间缓冲
-                    if self.stats.total_refreshes % 50 == 0:
-                        gc.collect()
+                    # 定期强制 GC，清理 OCR/OpenCV 中间缓冲区
+                    if self.stats.total_refreshes % 10 == 0:
+                        self._cleanup_memory()
 
                     # 每 100 轮记录内存用量
                     if self.stats.total_refreshes % 100 == 0:
