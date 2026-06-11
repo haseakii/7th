@@ -6,6 +6,7 @@ __pycache__/
 dist/
 build/
 *.egg
+7th/dist/
 
 # Virtual environment
 .venv/
@@ -13,12 +14,14 @@ build/
 # Hypothesis test artifacts
 .hypothesis/
 
-# Runtime logs
+# Runtime logs & artifacts
 log/
 logs/
 screenshots/
+debug_regions/
 7th/log/
 7th/screenshots/
+7th/debug_regions/
 
 # User config
 7th/config/default.json
@@ -33,6 +36,13 @@ platform-tools/
 # ALAS reference & copied code
 AzurLaneAutoScript/
 7th/_ext/
+
+# AI / IDE config files
+.claude/
+.continue/
+.cursor/
+7th/.claude/
+7th/.continue/
 
 # IDE
 .idea/
