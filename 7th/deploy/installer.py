@@ -19,6 +19,12 @@ from module.logger import logger
 # 项目根目录 — installer.py 所在 deploy/ 的上级
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# 跨平台 venv Python 路径
+if sys.platform == "win32":
+    _VENV_PYTHON = _PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+else:
+    _VENV_PYTHON = _PROJECT_ROOT / ".venv" / "bin" / "python"
+
 
 class Installer:
     """安装协调器。
@@ -33,7 +39,7 @@ class Installer:
         self.git = GitManager(config_path)
         self.pip = PipManager(config_path)
         self._venv_path = _PROJECT_ROOT / ".venv"
-        self._venv_python = self._venv_path / "Scripts" / "python.exe"
+        self._venv_python = _VENV_PYTHON
 
     @property
     def venv_ready(self) -> bool:
@@ -67,19 +73,21 @@ class Installer:
         return True
 
     def _pip_install(self) -> bool:
-        """在 venv 中安装依赖。"""
+        """在 venv 中安装依赖。输出 pip 进度到终端。"""
         req_file = _PROJECT_ROOT / "requirements.txt"
         if not req_file.exists():
             logger.warning("requirements.txt 不存在，跳过")
             return True
 
         logger.hr("安装 Python 依赖", level=1)
+        logger.info("下载大包（如 paddleocr、onnxruntime）可能需要几分钟，请耐心等待...")
         ret = subprocess.run(
             [str(self._venv_python), "-m", "pip", "install", "-r", str(req_file)],
-            capture_output=True, text=True, timeout=600,
+            # 不捕获输出，让 pip 进度直接显示在终端
+            timeout=1800,
         )
         if ret.returncode != 0:
-            logger.error(f"依赖安装失败: {ret.stderr}")
+            logger.error("依赖安装失败")
             return False
 
         logger.info("依赖安装完成")
@@ -140,7 +148,11 @@ class Installer:
         return True
 
     def launch_gui(self) -> None:
-        """通过 venv Python 启动 WebUI。"""
+        """通过 venv Python 启动 WebUI，替换当前进程。
+
+        Windows 上用 subprocess.Popen + os._exit(0) 避免孤儿进程。
+        Unix 上直接用 os.execv 替换进程镜像。
+        """
         if not self.venv_ready:
             logger.error("虚拟环境未就绪，请先运行 install")
             return
@@ -151,10 +163,18 @@ class Installer:
             return
 
         logger.info(f"启动 WebUI: {gui_py}")
-        subprocess.Popen(
-            [str(self._venv_python), str(gui_py)],
-            cwd=str(_PROJECT_ROOT),
-        )
+
+        if sys.platform == "win32":
+            subprocess.Popen(
+                [str(self._venv_python), str(gui_py)],
+                cwd=str(_PROJECT_ROOT),
+            )
+            os._exit(0)
+        else:
+            os.execv(
+                str(self._venv_python),
+                [str(self._venv_python), str(gui_py)],
+            )
 
 
 if __name__ == "__main__":

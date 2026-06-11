@@ -33,8 +33,8 @@ def main():
                 if inst.config.AutoUpdate and inst.git.has_update():
                     print("检测到更新，正在更新...")
                     inst.update()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"检查更新失败，跳过: {e}")
 
         # 启动 WebUI
         inst.launch_gui()
