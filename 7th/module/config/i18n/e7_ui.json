@@ -1,0 +1,271 @@
+{
+  "Menu": {
+    "SecretShop": {
+      "name": "秘密商店",
+      "help": "秘密商店自动刷新购买"
+    },
+    "SecretShop.ShopItems": {
+      "name": "购买物品"
+    },
+    "SecretShop.RefreshSettings": {
+      "name": "刷新设置"
+    },
+    "SecretShop.Thresholds": {
+      "name": "阈值设置"
+    },
+    "SecretShop.StopConditions": {
+      "name": "停止条件"
+    },
+    "Device": {
+      "name": "设备",
+      "help": "设备连接设置"
+    },
+    "Device.Connection": {
+      "name": "连接"
+    },
+    "Webui": {
+      "name": "WebUI",
+      "help": "Web 界面设置"
+    },
+    "Webui.Server": {
+      "name": "服务器"
+    }
+  },
+  "Task": {
+    "SecretShop": {
+      "name": "秘密商店",
+      "help": ""
+    },
+    "secret_shop": {
+      "name": "秘密商店",
+      "help": ""
+    },
+    "Device": {
+      "name": "设备",
+      "help": ""
+    },
+    "Webui": {
+      "name": "WebUI",
+      "help": ""
+    }
+  },
+  "ShopItems": {
+    "_info": {
+      "name": "购买物品",
+      "help": ""
+    },
+    "BuyBookmarks": {
+      "name": "购买书签",
+      "help": ""
+    },
+    "BuyMysticMedals": {
+      "name": "购买神秘奖章",
+      "help": ""
+    },
+    "BuyEquipment": {
+      "name": "购买装备",
+      "help": ""
+    },
+    "BuyFodder": {
+      "name": "购买狗粮",
+      "help": ""
+    }
+  },
+  "RefreshSettings": {
+    "_info": {
+      "name": "刷新设置",
+      "help": ""
+    },
+    "MaxRefreshCount": {
+      "name": "最大刷新次数",
+      "help": ""
+    },
+    "MaxSkystoneSpend": {
+      "name": "天空石消耗上限",
+      "help": ""
+    }
+  },
+  "Thresholds": {
+    "_info": {
+      "name": "阈值设置",
+      "help": ""
+    },
+    "GoldThreshold": {
+      "name": "金币阈值",
+      "help": ""
+    },
+    "SkystoneThreshold": {
+      "name": "天空石阈值",
+      "help": ""
+    }
+  },
+  "StopConditions": {
+    "_info": {
+      "name": "停止条件",
+      "help": ""
+    },
+    "MaxBookmarks": {
+      "name": "书签购买上限",
+      "help": ""
+    },
+    "MaxMysticMedals": {
+      "name": "神秘奖章购买上限",
+      "help": ""
+    }
+  },
+  "Connection": {
+    "_info": {
+      "name": "连接",
+      "help": ""
+    },
+    "Serial": {
+      "name": "设备序列号",
+      "help": ""
+    },
+    "ScreenshotMethod": {
+      "name": "截图方式",
+      "help": "",
+      "auto": "自动",
+      "adb": "ADB (PNG)",
+      "adb_nc": "ADB (raw)",
+      "uiautomator2": "uiautomator2",
+      "ascreencap": "aScreenCap",
+      "ascreencap_nc": "aScreenCap (raw)",
+      "droidcast": "DroidCast",
+      "droidcast_raw": "DroidCast (raw)",
+      "nemu_ipc": "MuMu IPC",
+      "ldopengl": "LDPlayer OpenGL"
+    },
+    "ControlMethod": {
+      "name": "控制方式",
+      "help": "",
+      "auto": "自动",
+      "adb": "ADB",
+      "uiautomator2": "uiautomator2",
+      "minitouch": "minitouch",
+      "hermit": "Hermit",
+      "maatouch": "MaaTouch"
+    },
+    "OcrMethod": {
+      "name": "OCR 方式",
+      "help": "",
+      "rapidocr": "RapidOCR",
+      "easyocr": "EasyOCR",
+      "paddleocr": "PaddleOCR",
+      "alas": "ALAS (cnocr)"
+    }
+  },
+  "Server": {
+    "_info": {
+      "name": "服务器",
+      "help": ""
+    },
+    "WebuiPort": {
+      "name": "WebUI 端口",
+      "help": ""
+    }
+  },
+  "Gui": {
+    "AddAlas": {
+      "Confirm": "Confirm",
+      "CopyFrom": "Copy from",
+      "Manage": "Manage",
+      "NewName": "New name",
+      "PopupTitle": "Add config"
+    },
+    "AppManage": {
+      "Actions": "Actions",
+      "Back": "Back",
+      "CopyFrom": "Copy from",
+      "Delete": "Delete",
+      "Export": "Export",
+      "Import": "Import",
+      "ImportSuccess": "Import success",
+      "InvalidChar": "Invalid character",
+      "InvalidPrefixTemplate": "Cannot use template- prefix",
+      "Mod": "Mod",
+      "Name": "Name",
+      "NameExist": "Name already exists",
+      "New": "New",
+      "NewName": "New name",
+      "NewSuccess": "New config created",
+      "OverrideWarning": "Config already exists, override?",
+      "TitleNew": "Create config"
+    },
+    "Aside": {
+      "Home": "Home"
+    },
+    "Button": {
+      "CancelUpdate": "Cancel update",
+      "CheckUpdate": "Check update",
+      "ClickToUpdate": "Click to update",
+      "RetryUpdate": "Retry",
+      "ScrollOFF": "Scroll: OFF",
+      "ScrollON": "Scroll: ON",
+      "Setting": "Settings",
+      "Start": "Start",
+      "Stop": "Stop"
+    },
+    "MenuAlas": {
+      "Overview": "Overview"
+    },
+    "MenuDevelop": {
+      "HomePage": "Homepage",
+      "Remote": "Remote",
+      "Translate": "Translate",
+      "Update": "Update",
+      "Utils": "Utilities"
+    },
+    "Overview": {
+      "Log": "Log",
+      "NoTask": "No task",
+      "Pending": "Pending",
+      "Running": "Running",
+      "Scheduler": "Scheduler",
+      "Waiting": "Waiting"
+    },
+    "Remote": {
+      "ConfigureHint": "Configure remote access in deploy settings",
+      "EntryPoint": "Entry point",
+      "NotEnable": "Remote access not enabled",
+      "NotRunning": "Not running",
+      "Running": "Running",
+      "SSHNotInstall": "SSH not installed"
+    },
+    "Status": {
+      "Inactive": "Inactive",
+      "Running": "Running",
+      "Updating": "Updating",
+      "Warning": "Warning"
+    },
+    "Text": {
+      "ChooseFile": "Choose file",
+      "Clear": "Clear",
+      "InvalidFeedBack": "Invalid value"
+    },
+    "Toast": {
+      "ClickToUpdate": "Click to update",
+      "ConfigSaved": "Config saved",
+      "DisableTranslateMode": "Translate mode disabled"
+    },
+    "Update": {
+      "Author": "Author",
+      "DetailedHistory": "Detailed history",
+      "DisabledWarn": "Update disabled in config",
+      "HaveUpdate": "Update available",
+      "Local": "Local",
+      "Message": "Message",
+      "Time": "Time",
+      "UpToDate": "Up to date",
+      "UpdateCancel": "Update cancelled",
+      "UpdateChecking": "Checking for updates",
+      "UpdateFailed": "Update failed",
+      "UpdateFinish": "Update finished",
+      "UpdateRun": "Running update",
+      "UpdateStart": "Starting update",
+      "UpdateSuccess": "Update success",
+      "UpdateWait": "Waiting for update",
+      "Upstream": "Upstream"
+    }
+  }
+}
