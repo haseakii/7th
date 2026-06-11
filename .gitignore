@@ -5,28 +5,47 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*.egg
+
+# Virtual environment
+.venv/
 
 # Hypothesis test artifacts
 .hypothesis/
 
 # Runtime logs
+log/
 logs/
 screenshots/
+7th/log/
+7th/screenshots/
 
-# IDE
-.idea/
-.vscode/
-
-# Config (keep template, ignore local overrides)
+# User config
+7th/config/default.json
+7th/config/deploy.yaml
 config.yaml
+7th/config/config.yaml
 
 # ADB
 adb/
 platform-tools/
 
-# ALAS reference code (do not commit)
+# ALAS reference & copied code
 AzurLaneAutoScript/
+7th/_ext/
+
+# IDE
+.idea/
+.vscode/
 
 # OS
 Thumbs.db
 .DS_Store
+
+# Editor temp files
+*.swp
+*.swo
+*~
+
+# Environment
+.env
