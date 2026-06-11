@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec file for ShopBot
-# 用法: pyinstaller build.spec
+# PyInstaller spec file for E7 Shop Bot
+# 用法: pip install pyinstaller && pyinstaller build.spec
 
 import os
 import sys
@@ -9,44 +9,66 @@ block_cipher = None
 ROOT = os.path.abspath('.')
 
 a = Analysis(
-    ['main.py'],
+    ['gui.py'],
     pathex=[ROOT],
     binaries=[],
     datas=[
         ('assets', 'assets'),
+        ('config/*.json', 'config'),
         ('module/config/argument', 'module/config/argument'),
-        ('module/webui/css', 'module/webui/css'),
+        ('module/config/i18n', 'module/config/i18n'),
     ],
     hiddenimports=[
+        # WebUI
         'pywebio',
-        'pywebio.platform.tornado',
         'pywebio.platform.fastapi',
         'pywebio.output',
         'pywebio.input',
         'pywebio.pin',
         'pywebio.session',
-        'tornado',
-        'tornado.web',
-        'tornado.ioloop',
-        'tornado.websocket',
+        # ASGI 服务
         'uvicorn',
         'fastapi',
+        'starlette',
+        'starlette.websockets',
+        # 框架
+        'rich',
+        'rich.highlighter',
+        'rich.theme',
         'yaml',
+        'inflection',
+        # 图像处理
         'cv2',
         'numpy',
         'PIL',
-        # ALAS 风格模块
+        # OCR
+        'rapidocr',
+        'cnocr',
+        # 设备控制
+        'uiautomator2',
+        'adbutils',
+        # E7 模块
         'module.config',
         'module.config.argument',
+        'module.config.i18n',
         'module.webui',
-        'module.base',
+        'module.device',
+        'module.device.screenshot',
+        'module.device.control',
+        'module.ocr',
+        'module.submodule',
+        'module.logger',
         'tasks.secret_shop',
+        'tasks.secret_shop.ocr_backends',
         'deploy',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'tkinter', 'scipy', 'pandas'],
+    excludes=[
+        'matplotlib', 'tkinter', 'pandas',
+        'PyQt5', 'PyQt6', 'PySide2', 'PySide6',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
