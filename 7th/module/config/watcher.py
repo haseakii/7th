@@ -13,10 +13,10 @@ class ConfigWatcher:
         self.start_mtime = self.get_mtime()
 
     def get_mtime(self) -> datetime:
-        """
-        Last modify time of the file
-        """
-        timestamp = os.stat(filepath_config(self.config_name)).st_mtime
+        try:
+            timestamp = os.stat(filepath_config(self.config_name)).st_mtime
+        except FileNotFoundError:
+            return DEFAULT_TIME
         mtime = datetime.fromtimestamp(timestamp).replace(microsecond=0)
         return mtime
 

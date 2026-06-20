@@ -40,7 +40,7 @@ from pywebio.pin import pin, pin_on_change
 from pywebio.session import download, go_app, info, local, register_thread, run_js, set_env
 
 import module.webui.lang as lang
-from module.config.config import AzurLaneConfig, Function
+from module.config.config import E7Config, Function
 from module.config.deep import deep_get, deep_iter, deep_set
 from module.config.env import IS_ON_PHONE_CLOUD
 from module.config.utils import (
@@ -113,7 +113,7 @@ class AlasGUI(Frame):
         # alas config name
         self.alas_name = ""
         self.alas_mod = "alas"
-        self.alas_config = AzurLaneConfig("template")
+        self.alas_config = E7Config("template")
         self.initial()
         # rendered state cache
         self.rendered_cache = []
@@ -515,7 +515,7 @@ class AlasGUI(Frame):
             self,
             modified: Dict[str, str],
             config_name: str,
-            config_updater: AzurLaneConfig = State.config_updater,
+            config_updater: E7Config = State.config_updater,
     ) -> None:
         try:
             valid = []
@@ -523,7 +523,11 @@ class AlasGUI(Frame):
             config = config_updater.read_file(config_name)
             n = datetime.now()
             for p, v in deep_iter(config, depth=3):
-                if p[-1].endswith('un') and not isinstance(v, bool):
+                if isinstance(v, str) and p[-1] == 'NextRun':
+                    try:
+                        v = datetime.fromisoformat(v.replace(' ', 'T'))
+                    except (ValueError, TypeError):
+                        continue
                     if (v - n).days >= 31:
                         deep_set(config, p, '')
             for k, v in modified.copy().items():

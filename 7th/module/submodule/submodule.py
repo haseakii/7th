@@ -21,9 +21,9 @@ def load_mod(name):
 
 
 def load_config(config_name):
-    """加载 E7 配置，返回 AzurLaneConfig 实例。"""
-    from module.config.config import AzurLaneConfig
+    """加载 E7 配置，返回 E7Config 实例。"""
+    from module.config.config import E7Config
 
     mod_name = get_config_mod(config_name)
-    # E7 固定为 alas，直接返回 AzurLaneConfig（我们的存根）
-    return AzurLaneConfig(config_name)
+    # E7 固定为 alas，直接返回 E7Config（我们的存根）
+    return E7Config(config_name)

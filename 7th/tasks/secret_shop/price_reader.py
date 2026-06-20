@@ -25,7 +25,7 @@ PRICE_Y_FRACTION = 0.45  # Use top 45% of row height for price text
 MATCH_THRESHOLD = 0.85
 
 _TEMPLATE_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "assets", "e7", "prices",
 )
 

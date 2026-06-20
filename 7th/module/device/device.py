@@ -41,7 +41,11 @@ class DeviceController:
         """支持 E7Config 和 DeviceConfig 两种配置对象。"""
         # 处理 serial 为 None / "None" 的情况
         raw = getattr(config, 'serial', None) or getattr(config, 'device_serial', None)
-        self.serial = raw if raw and str(raw) != 'None' else '127.0.0.1:16384'
+        if raw and str(raw) != 'None':
+            self.serial = raw
+        else:
+            logger.warning("未设置设备串口，使用默认 127.0.0.1:16384（MuMu Player 12）")
+            self.serial = '127.0.0.1:16384'
         self.screenshot_method: str = getattr(config, 'screenshot_method', None) or getattr(config, 'device_screenshot_method', 'ADB')
         self.control_method: str = getattr(config, 'control_method', None) or getattr(config, 'device_control_method', 'ADB')
         self.image: Optional['np.ndarray'] = None

@@ -38,7 +38,8 @@ def _run_alas(config_name: str = "default") -> None:
     from alas import E7AutoScript
     logger.info("启动 E7AutoScript（ALAS 框架）...")
     alas = E7AutoScript(config_name=config_name)
-    alas.loop()
+    if alas.init():
+        alas.loop()
 
 
 def _run_webui() -> None:

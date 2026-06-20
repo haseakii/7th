@@ -543,7 +543,7 @@ def raise_exception(x=3):
 
 def get_alas_config_listen_path(args):
     for path, d in deep_iter(args, depth=3):
-        if d.get("display") in ["readonly", "hide"]:
+        if isinstance(d, dict) and d.get("display") in ["readonly", "hide"]:
             continue
         yield path
 

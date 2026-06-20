@@ -31,11 +31,8 @@ class SecretShopTask(ModuleBase):
         # 延迟导入避免循环依赖：shop_bot → tasks.secret_shop → shop_bot
         from shop_bot import ShopBot
 
-        self.bot = ShopBot(config=self.config)
+        self.bot = ShopBot(config=self.config, device=self.device)
         self.bot._stop_event = self._stop_event
-
-        # 使用外部传入的 device（避免重复连接）
-        self.bot.device = self.device
 
         self._running = True
         self.bot.run_loop()

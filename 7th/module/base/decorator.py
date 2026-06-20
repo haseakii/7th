@@ -24,7 +24,7 @@ class Config:
     def when(cls, **kwargs):
         """
         Args:
-            **kwargs: Any option in AzurLaneConfig.
+            **kwargs: Any option in E7Config.
 
         Examples:
             @Config.when(USE_ONE_CLICK_RETIREMENT=True)

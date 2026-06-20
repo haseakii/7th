@@ -122,7 +122,7 @@ class HermitControl(ControlStrategy):
         self.serial = serial
 
     def initialize(self) -> bool:
-        bin_path = os.path.join(_ALAS_BIN, 'hermit', 'hermit')
+        bin_path = os.path.join(ALAS_BIN, 'hermit', 'hermit')
         if not os.path.isfile(bin_path):
             logger.warning("Hermit 二进制不存在")
             return False
@@ -153,10 +153,10 @@ class MaaTouchControl(ControlStrategy):
         self._available = False
 
     def initialize(self) -> bool:
-        bin_path = os.path.join(_ALAS_BIN, 'MaaTouch', 'maatouch')
+        bin_path = os.path.join(ALAS_BIN, 'MaaTouch', 'maatouch')
         if not os.path.isfile(bin_path):
             # 尝试 arm64 版本
-            bin_path = os.path.join(_ALAS_BIN, 'MaaTouch', 'maatouch_arm64')
+            bin_path = os.path.join(ALAS_BIN, 'MaaTouch', 'maatouch_arm64')
             if not os.path.isfile(bin_path):
                 logger.warning("MaaTouch 二进制不存在")
                 return False

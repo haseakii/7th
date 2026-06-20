@@ -7,6 +7,7 @@ import yaml
 
 import module.config.server as server_
 from deploy.atomic import atomic_read_text, atomic_read_bytes, atomic_write
+from module.logger import logger
 from module.submodule.utils import *
 
 LANGUAGES = ['zh-CN', 'en-US', 'ja-JP', 'zh-TW']
@@ -24,6 +25,25 @@ SERVER_TO_TIMEZONE = {
     'tw': timedelta(hours=8),
 }
 DEFAULT_TIME = datetime(2020, 1, 1, 0, 0)
+
+
+def parse_time(value):
+    """将字符串或 datetime 统一转为 datetime。
+
+    Args:
+        value: str (如 '2020-01-01 00:00:00') 或 datetime
+
+    Returns:
+        datetime: 解析后的时间，解析失败返回 DEFAULT_TIME
+    """
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace(' ', 'T'))
+        except (ValueError, TypeError):
+            pass
+    return DEFAULT_TIME
 
 
 # https://stackoverflow.com/questions/8640959/how-can-i-control-what-scalar-form-pyyaml-uses-for-my-data/15423007
@@ -77,7 +97,7 @@ def read_file(file):
     Returns:
         dict, list:
     """
-    print(f'read: {file}')
+    logger.info(f'读取配置: {file}')
     if file.endswith('.json'):
         content = atomic_read_bytes(file)
         if not content:
@@ -92,7 +112,7 @@ def read_file(file):
             data = {}
         return data
     else:
-        print(f'Unsupported config file extension: {file}')
+        logger.warning(f'不支持的配置扩展名: {file}')
         return {}
 
 
@@ -104,7 +124,7 @@ def write_file(file, data):
         file (str):
         data (dict, list):
     """
-    print(f'write: {file}')
+    logger.info(f'写入配置: {file}')
     if file.endswith('.json'):
         content = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=False, default=str)
         atomic_write(file, content)
@@ -117,7 +137,7 @@ def write_file(file, data):
                 data, default_flow_style=False, encoding='utf-8', allow_unicode=True, sort_keys=False)
         atomic_write(file, content)
     else:
-        print(f'Unsupported config file extension: {file}')
+        logger.warning(f'不支持的配置扩展名: {file}')
 
 
 def iter_folder(folder, is_dir=False, ext=None):

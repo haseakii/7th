@@ -11,6 +11,7 @@ E7AutoScript — 第七史诗 ALAS 风格主调度器
 """
 
 import threading
+from datetime import datetime
 from typing import Optional
 
 import inflection
@@ -79,7 +80,8 @@ class E7AutoScript:
           1. config.load() — 从磁盘重新读取 JSON
           2. get_next() — 从 JSON 发现下一个任务
           3. run(command) — 派发到对应方法
-          4. device.config = config — 保持设备引用最新
+          4. task_delay() — 任务结束后更新 NextRun
+          5. device.config = config — 保持设备引用最新
         """
         logger.info(f"启动调度循环: {self.config_name}")
 
@@ -87,17 +89,38 @@ class E7AutoScript:
         self.config.load()
 
         while not self._stop_event.is_set():
+            # ── 获取下一个任务 ──
             try:
                 task = self.config.get_next()
             except RequestHumanTakeover:
                 logger.critical("没有启用的任务，退出")
                 break
 
+            # ── 如果任务调度时间在未来，等待（最多 60s 轮询 stop_event） ──
+            now = datetime.now()
+            if isinstance(task.next_run, datetime) and task.next_run > now:
+                remaining = int((task.next_run - now).total_seconds())
+                logger.info(f"等待 {remaining}s 至 `{task.command}` 调度时间")
+                while remaining > 0:
+                    chunk = min(remaining, 60)
+                    if self._stop_event.wait(chunk):
+                        break
+                    remaining -= chunk
+                if self._stop_event.is_set():
+                    break
+                continue
+
+            # ── 执行任务 ──
             command = inflection.underscore(task.command)
             self._device.config = self.config
+            self.config.task = task
             logger.hr(command, level=0)
             success = self.run(command)
 
+            # ── 任务完成后更新调度时间 ──
+            self.config.task_delay(success=success, task=task.command)
+
+            # ── 失败计数 ──
             failed = self.failure_record.get(command, 0)
             failed = 0 if success else failed + 1
             self.failure_record[command] = failed
@@ -105,7 +128,7 @@ class E7AutoScript:
                 logger.critical(f"任务 `{command}` 连续失败 3 次，退出")
                 break
 
-            # 重读配置（响应 WebUI 变更）
+            # ── 重读配置（响应 WebUI 变更） ──
             self.config.load()
 
         logger.info("调度循环结束")
@@ -148,9 +171,16 @@ class E7AutoScript:
         """重启设备连接。"""
         logger.info("正在重启设备连接...")
         if self._device:
-            self._device.disconnect()
+            try:
+                self._device.disconnect()
+            except Exception as e:
+                logger.warning(f"断开设备连接异常: {e}")
         if self._device:
-            return self._device.connect()
+            try:
+                return self._device.connect()
+            except Exception as e:
+                logger.warning(f"重建设备连接异常: {e}")
+                return False
         return False
 
     def stop(self) -> None:

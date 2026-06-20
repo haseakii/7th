@@ -31,17 +31,17 @@ from tasks.secret_shop.scene_manager import SceneManager
 # 常量
 # ---------------------------------------------------------------------------
 
-# 刷新按钮搜索区域（底部左侧，扩展到屏幕最底部）
-REFRESH_BTN_REGION = (50, 620, 400, 718)
+# 刷新按钮搜索区域（底部右侧，与标定值对齐）
+REFRESH_BTN_REGION = (1000, 530, 1220, 570)
 
 # 弹窗检测区域（居中弹窗）
 POPUP_REGION = (300, 440, 950, 550)
 
-# 天空石数值区域（实测 x≈918, y≈34）
-SKYSTONE_REGION = (860, 0, 990, 55)
+# 天空石数值区域（与标定值对齐：x=1100-1260, y=5-30）
+SKYSTONE_REGION = (1100, 0, 1260, 50)
 
-# 金币数值区域（实测 x≈780）
-GOLD_REGION = (450, 5, 970, 40)
+# 金币数值区域（与标定值对齐）
+GOLD_REGION = (790, 5, 970, 40)
 
 # 滑动翻页参数
 SCROLL_AREA = (800, 400, 800, 150)
@@ -163,7 +163,6 @@ class ShopBot:
 
     def _cleanup_memory(self) -> None:
         """定期内存清理：GC + OpenCV 缓冲。"""
-        import gc
         gc.collect()
         try:
             import cv2
@@ -278,7 +277,7 @@ class ShopBot:
         if not popup_detected:
             logger.warning("校准: 所有物品均无弹窗，跳过")
         else:
-            self._log_calibration_offset()
+            pass  # 坐标已缓存到 self._confirm_offsets
 
         # 顺便缓存刷新按钮位置，后续刷新跳过 OCR
         self._cache_refresh_button()
@@ -348,10 +347,6 @@ class ShopBot:
                 self.device.click_position(click_x, click_y)
 
         return False
-
-    def _log_calibration_offset(self) -> None:
-        """日志输出校准确认按钮坐标偏差（上次校准时的记录）。"""
-        pass
 
     def _log_active_methods(self) -> None:
         """打印当前使用的截图/控制方式。"""
@@ -554,13 +549,11 @@ class ShopBot:
 
     def refresh_shop(self) -> bool:
         """刷新货架（优先用缓存位置，跳过 OCR）。"""
-        # 刷新前校验场景
         if not self._ensure_secret_shop():
             logger.error("场景校验失败，无法刷新")
             return False
 
         for attempt in range(1, REFRESH_MAX_RETRIES + 1):
-            # 优先用缓存位置
             btn_pos = self._refresh_btn_pos
             if btn_pos is None:
                 logger.info(f"寻找刷新按钮（第 {attempt} 次）")
@@ -575,20 +568,22 @@ class ShopBot:
 
             logger.info(f"点击刷新按钮 {btn_pos}")
             self.device.click_position(btn_pos[0], btn_pos[1])
-
-            # 等弹窗出现后直接点固定坐标，跳过 OCR
             time.sleep(0.6)
+
+            # 点固定坐标确认按钮
             logger.info(f"点击刷新确认 @ {REFRESH_CONFIRM_BTN_POS}")
             self.device.click_position(REFRESH_CONFIRM_BTN_POS[0], REFRESH_CONFIRM_BTN_POS[1])
+
+            # 验证弹窗已关闭
             time.sleep(0.5)
-            confirmed = True
+            verify_img = self.device.screenshot()
+            if self._find_popup_confirm(verify_img) is not None:
+                logger.warning(f"刷新确认弹窗未关闭（第 {attempt} 次），重试")
+                continue
 
-            if confirmed:
-                logger.info("等待货架加载...")
-                time.sleep(SHELF_LOAD_WAIT)
-                return True
-
-            logger.warning(f"刷新确认弹窗未出现（第 {attempt} 次）")
+            logger.info("等待货架加载...")
+            time.sleep(SHELF_LOAD_WAIT)
+            return True
 
         logger.error(f"刷新失败，已重试 {REFRESH_MAX_RETRIES} 次")
         return False
@@ -721,12 +716,8 @@ class ShopBot:
         if cfg.shop.skystone_threshold <= 0:
             return True
 
-        # 首次 OCR 若失败，不推算（skystone_remaining 无效）
-        if not self._skystone_known:
-            return True
-
-        # 每 10 轮 OCR 校准一次，避免偏差累积
-        if self._skystone_check_counter >= 10:
+        # 每 10 轮 OCR 校准一次，避免偏差累积；首次运行立即 OCR
+        if self._skystone_check_counter >= 10 or not self._skystone_known:
             image = self.device.screenshot()
             value, conf = self._ocr.read_number(
                 image, region=SKYSTONE_REGION, min_confidence=0.3
@@ -737,13 +728,14 @@ class ShopBot:
                 logger.info(f"天空石(OCR): {value} (conf={conf:.2f})")
             else:
                 logger.warning("天空石 OCR 失败，使用推算值")
+                self._skystone_known = True  # 标记已尝试过，后续用推算值
             self._skystone_check_counter = 0
 
         logger.info(
             f"天空石: {self.stats.skystone_remaining}, "
             f"阈值: {cfg.shop.skystone_threshold}"
         )
-        if self.stats.skystone_remaining < cfg.shop.skystone_threshold:
+        if self._skystone_known and self.stats.skystone_remaining < cfg.shop.skystone_threshold:
             return False
 
         return True

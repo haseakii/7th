@@ -229,6 +229,6 @@ class TestConstants:
     def test_constants_defined(self):
         assert MAX_CONSECUTIVE_ERRORS == 3
         assert SKYSTONE_PER_REFRESH == 3
-        assert REFRESH_BTN_REGION == (50, 620, 400, 718)
+        assert REFRESH_BTN_REGION == (1000, 530, 1220, 570)
         assert REFRESH_CONFIRM_BTN_POS == (748, 460)
-        assert SKYSTONE_REGION == (860, 0, 990, 55)
+        assert SKYSTONE_REGION == (1100, 0, 1260, 50)

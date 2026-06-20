@@ -78,7 +78,10 @@ class ProcessManager:
 
         with lock:
             if self.alive:
-                self._process.kill()
+                self._process.terminate()
+                self._process.join(timeout=5)
+                if self._process.is_alive():
+                    self._process.kill()
                 self.renderables.append(
                     f"[{self.config_name}] exited. Reason: Manual stop\n"
                 )
@@ -179,12 +182,12 @@ class ProcessManager:
             logger.removeHandler(console_hdlr)
         set_func_logger(func=q.put)
 
-        from module.config.config import AzurLaneConfig
+        from module.config.config import E7Config
 
         # Remove fake PIL module, because subprocess will use it
         remove_fake_pil_module()
 
-        AzurLaneConfig.stop_event = e
+        E7Config.stop_event = e
         try:
             # Run E7 bot
             if func == "alas" or func == "SecretShop":
@@ -194,11 +197,13 @@ class ProcessManager:
                     E7AutoScript.stop_event = e
                 e7 = E7AutoScript(config_name=config_name)
                 if e7.init():
-                    e7.run_secret_shop()
+                    e7.loop()
             elif func in get_available_func():
                 from alas import E7AutoScript
 
-                E7AutoScript(config_name=config_name).run(inflection.underscore(func), skip_first_screenshot=True)
+                e7 = E7AutoScript(config_name=config_name)
+                if e7.init():
+                    e7.run(inflection.underscore(func))
             elif func in get_available_mod():
                 mod = load_mod(func)
 
