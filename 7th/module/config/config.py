@@ -24,7 +24,7 @@ from module.config.config_manual import ManualConfig
 from module.config.config_updater import ConfigUpdater, filepath_config
 from module.config.watcher import ConfigWatcher
 from module.config.deep import deep_get, deep_set
-from module.config.utils import DEFAULT_TIME, ensure_time, filepath_config as utils_filepath_config, read_file
+from module.config.utils import DEFAULT_TIME, ensure_time, parse_time, filepath_config as utils_filepath_config, read_file
 from module.exception import RequestHumanTakeover, ScriptError
 
 
@@ -128,14 +128,15 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
     def _reload(self) -> None:
         """配置文件外部变更时重新加载。"""
         with self._lock:
-            old_data = copy.deepcopy(self.data)
             self.data = self._load()
             logger.info('配置已重载')
 
     def __getattr__(self, key: str):
         """支持通过属性名读取配置值。"""
         if key.startswith('_') or key in ('data', 'modified', 'auto_update', '_lock', '_bound',
-                                           'config_name', 'stop_event'):
+                                           'config_name', 'stop_event', '_task',
+                                           '_pending_task', '_waiting_task',
+                                           '_watcher', '_watcher_stop'):
             raise AttributeError(key)
 
         # 1. 检查 ManualConfig 类属性
@@ -153,7 +154,8 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
     def __setattr__(self, key: str, value: Any):
         """支持通过属性名写入配置值。"""
         if key in ('data', 'modified', 'auto_update', '_lock', '_bound',
-                   'config_name', 'stop_event', '_watcher', '_watcher_stop'):
+                   'config_name', 'stop_event', '_watcher', '_watcher_stop',
+                   '_task', '_pending_task', '_waiting_task'):
             super().__setattr__(key, value)
             return
 
@@ -195,7 +197,15 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
         error = []
         now = datetime.now().replace(microsecond=0)
 
-        for data in self.data.values():
+        if not isinstance(self.data, dict):
+            logger.error(f'self.data 不是 dict: {type(self.data)}')
+            self.pending_task = []
+            self.waiting_task = []
+            return
+
+        for key, data in self.data.items():
+            if not isinstance(data, dict):
+                continue
             func = Function(data)
             if not func.enable:
                 continue
@@ -274,7 +284,7 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
             if task is None:
                 task = self.task.command if self.task else 'SecretShop'
             logger.info(f'延迟任务 `{task}` 至 {run}')
-            self.modified[f'{task}.Scheduler.NextRun'] = run
+            self.modified[f'{task}.Scheduler.NextRun'] = run.strftime('%Y-%m-%d %H:%M:%S')
             self.update()
 
     def task_call(self, task, force_call=True):
@@ -293,7 +303,7 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
 
         if force_call:
             logger.info(f'任务调用: {task}')
-            self.modified[f'{task}.Scheduler.NextRun'] = datetime.now().replace(microsecond=0)
+            self.modified[f'{task}.Scheduler.NextRun'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.modified[f'{task}.Scheduler.Enable'] = True
             if self.auto_update:
                 self.update()
@@ -408,8 +418,9 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
             json.dump(json_data, f, indent=2, ensure_ascii=False)
 
         # 备份 YAML
+        import os as _os
         bak = yaml_path.with_suffix('.yaml.bak')
-        yaml_path.rename(bak)
+        _os.replace(str(yaml_path), str(bak))
         logger.info(f'YAML 配置已迁移至 {json_path}，原文件备份为 {bak}')
 
     # ── ALAS 兼容接口 ──
@@ -452,7 +463,8 @@ class Function:
         if isinstance(data, dict):
             self.enable = deep_get(data, 'Scheduler.Enable', default=False)
             self.command = deep_get(data, 'Scheduler.Command', default='')
-            self.next_run = deep_get(data, 'Scheduler.NextRun', default=DEFAULT_TIME)
+            nr = deep_get(data, 'Scheduler.NextRun', default=DEFAULT_TIME)
+            self.next_run = parse_time(nr)
         else:
             self.enable = False
             self.command = ''

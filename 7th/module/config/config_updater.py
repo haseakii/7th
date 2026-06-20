@@ -5,6 +5,8 @@ ConfigUpdater — JSON 配置持久化
 """
 
 import json
+import os
+import tempfile
 import threading
 import time
 from copy import deepcopy
@@ -13,7 +15,7 @@ from typing import Any, Dict, Optional
 
 from module.logger import logger
 from module.config.deep import deep_get, deep_iter, deep_set
-from module.config.utils import filepath_args, write_file as _write_util
+from module.config.utils import write_file as _write_util
 
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / 'config'
@@ -31,10 +33,10 @@ class ConfigUpdater:
     data: dict = {}
     modified: dict = {}
     auto_update: bool = True
-    _lock: threading.RLock = threading.RLock()
 
     def __init__(self, config_name: str):
         self.config_name = config_name
+        self._lock = threading.RLock()
         self.data = self._load()
         self.modified = {}
 
@@ -44,22 +46,41 @@ class ConfigUpdater:
         if not path.exists():
             logger.info(f'配置文件不存在，创建默认: {path}')
             data = self._get_defaults()
+            self._inject_scheduler_to_tasks(data)
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            self._atomic_write(path, data)
             return data
 
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f'配置 {path} 损坏 ({e})，重置为默认')
+            data = self._get_defaults()
+            self._inject_scheduler_to_tasks(data)
+            self._atomic_write(path, data)
+            return data
 
         # 合并默认值确保不缺项
         defaults = self._get_defaults()
         merged = deepcopy(defaults)
         self._deep_merge(merged, data)
+        self._inject_scheduler_to_tasks(merged)
         if merged != data:
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(merged, f, indent=2, ensure_ascii=False)
+            self._atomic_write(path, merged)
         return merged
+
+    def _inject_scheduler_to_tasks(self, data: dict) -> None:
+        """为每个缺少 Scheduler 子组的任务组注入默认值。"""
+        scheduler_defaults = self._get_scheduler_defaults()
+        if not scheduler_defaults:
+            return
+        skip_groups = {'Scheduler', 'Device', 'Webui', 'Emulator'}
+        for key, value in list(data.items()):
+            if key in skip_groups:
+                continue
+            if isinstance(value, dict) and 'Scheduler' not in value:
+                data[key]['Scheduler'] = deepcopy(scheduler_defaults)
 
     def _get_defaults(self) -> dict:
         """从 args.json 提取默认值结构。"""
@@ -70,6 +91,22 @@ class ConfigUpdater:
             args = json.load(f)
         defaults = {}
         for path, arg in deep_iter(args, depth=3):
+            if path[0] == 'Scheduler':
+                continue
+            if isinstance(arg, dict) and 'value' in arg:
+                deep_set(defaults, path, deepcopy(arg['value']))
+        return defaults
+
+    def _get_scheduler_defaults(self) -> dict:
+        """提取 Scheduler 参数组默认值（注入到每个任务下）。"""
+        args_path = Path(__file__).resolve().parent / 'argument' / 'args.json'
+        if not args_path.exists():
+            return {}
+        with open(args_path, 'r', encoding='utf-8') as f:
+            args = json.load(f)
+        scheduler = args.get('Scheduler', {})
+        defaults = {}
+        for path, arg in deep_iter(scheduler, depth=1):
             if isinstance(arg, dict) and 'value' in arg:
                 deep_set(defaults, path, deepcopy(arg['value']))
         return defaults
@@ -84,12 +121,25 @@ class ConfigUpdater:
             else:
                 base[key] = deepcopy(value)
 
+    @staticmethod
+    def _atomic_write(path: Path, data: dict) -> None:
+        """原子写入 JSON，防止中途崩溃损坏文件。"""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix='.tmp', prefix=path.stem)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False, default=str)
+            os.replace(tmp, str(path))
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+
     def save(self) -> None:
         """将当前数据持久化到 JSON 文件。"""
-        path = filepath_config(self.config_name)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(self.data, f, indent=2, ensure_ascii=False)
+        self._atomic_write(filepath_config(self.config_name), self.data)
 
     def update(self) -> None:
         """将变更（modified）写回 data 并保存。"""
@@ -117,12 +167,6 @@ class ConfigUpdater:
 
     @staticmethod
     def write_file(config_name: str, data: dict, mod_name: str = 'alas') -> None:
-        """写入 JSON 配置文件（ALAS WebUI 兼容接口）。
-
-        Args:
-            config_name: 配置名（如 'default'）
-            data: 配置数据
-            mod_name: mod 名称（E7 固定为 'alas'）
-        """
-        path = filepath_args(config_name, mod_name)
-        _write_util(path, data)
+        """写入 JSON 配置文件（ALAS WebUI 兼容接口）。"""
+        path = filepath_config(config_name)
+        ConfigUpdater._atomic_write(path, data)
