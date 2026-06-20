@@ -23,7 +23,7 @@ from module.device.device import DeviceController
 from tasks.secret_shop.navigator import ShopNavigator
 from tasks.secret_shop.ocr_engine import OCR
 from tasks.secret_shop.purchase import PurchaseEngine, PurchaseResult, CONFIRM_BTN_POS, CANCEL_BTN_POS, POPUP_CANCEL_REGION, POPUP_CONFIRM_REGION, CONFIRM_POPUP_TIMEOUT
-from tasks.secret_shop.recognizer import ItemRecognizer
+from tasks.secret_shop.recognizer import ItemRecognizer, SHELF_COMPARE_AREA
 from tasks.secret_shop.scene import Scene
 from tasks.secret_shop.scene_manager import SceneManager
 
@@ -45,7 +45,9 @@ GOLD_REGION = (450, 5, 970, 40)
 
 # 滑动翻页参数
 SCROLL_AREA = (800, 400, 800, 150)
-SCROLL_WAIT = 0.5  # 等待滑动动画结束
+SCROLL_WAIT = 0.5
+SCROLL_SETTLE_TIMEOUT = 3.0  # 滑动后稳定超时（秒）
+SCROLL_FRAME_SIMILARITY = 0.98  # 连续两帧相似度阈值（判定滑动动画完成）  # 等待滑动动画结束
 MAX_SCROLL_COUNT = 8
 
 # 刷新确认弹窗等待超时
@@ -168,6 +170,53 @@ class ShopBot:
             cv2.setNumThreads(0)
         except Exception:
             pass
+
+    def _wait_scroll_settle(self, timeout: float = SCROLL_SETTLE_TIMEOUT) -> bool:
+        """等待滑动动画稳定。
+
+        连续截两帧，若图像相似度 >= SCROLL_FRAME_SIMILARITY 则认为已稳定。
+        首次等待 SCROLL_WAIT 后再开始检测（避免快速比较浪费截图调用）。
+        超时返回 False（继续执行，不阻塞主循环）。
+        """
+        time.sleep(SCROLL_WAIT)
+
+        import cv2
+        deadline = time.time() + timeout
+        try:
+            prev = self.device.screenshot()
+            if prev is None:
+                return False
+
+            while time.time() < deadline:
+                curr = self.device.screenshot()
+                if curr is None:
+                    return False
+
+                prev_crop = prev[
+                    SHELF_COMPARE_AREA[1]:SHELF_COMPARE_AREA[3],
+                    SHELF_COMPARE_AREA[0]:SHELF_COMPARE_AREA[2],
+                ]
+                curr_crop = curr[
+                    SHELF_COMPARE_AREA[1]:SHELF_COMPARE_AREA[3],
+                    SHELF_COMPARE_AREA[0]:SHELF_COMPARE_AREA[2],
+                ]
+                # 灰度转换 + 结构相似度
+                pgray = cv2.cvtColor(prev_crop, cv2.COLOR_BGR2GRAY)
+                cgray = cv2.cvtColor(curr_crop, cv2.COLOR_BGR2GRAY)
+                diff = cv2.absdiff(pgray, cgray)
+                similarity = 1.0 - (float(np.mean(diff)) / 255.0)
+
+                if similarity >= SCROLL_FRAME_SIMILARITY:
+                    return True
+
+                prev = curr
+                time.sleep(0.08)
+
+            logger.warning(f"滑动稳定等待超时 ({timeout}s)")
+            return False
+        except Exception as e:
+            logger.warning(f"滑动稳定检测异常: {e}")
+            return False
 
     @property
     def alive(self) -> bool:
@@ -606,7 +655,7 @@ class ShopBot:
                 start = (SCROLL_AREA[0], SCROLL_AREA[1])
                 end = (SCROLL_AREA[2], SCROLL_AREA[3])
                 self.device.swipe(start, end)
-                time.sleep(SCROLL_WAIT)
+                self._wait_scroll_settle()
 
                 # 截图
                 image = self.device.screenshot()
