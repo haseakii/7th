@@ -31,8 +31,8 @@ from tasks.secret_shop.scene_manager import SceneManager
 # 常量
 # ---------------------------------------------------------------------------
 
-# 刷新按钮搜索区域（底部右侧，与标定值对齐）
-REFRESH_BTN_REGION = (1000, 530, 1220, 570)
+# 刷新按钮搜索区域（底部左侧）
+REFRESH_BTN_REGION = (50, 620, 400, 718)
 
 # 弹窗检测区域（居中弹窗）
 POPUP_REGION = (300, 440, 950, 550)
