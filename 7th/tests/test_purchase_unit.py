@@ -35,7 +35,7 @@ def mock_device():
 @pytest.fixture
 def mock_config():
     config = MagicMock()
-    config.get_buy_list.return_value = {
+    config.buy_list = {
         "bookmarks": True,
         "mystic_medals": True,
         "equipment": False,
