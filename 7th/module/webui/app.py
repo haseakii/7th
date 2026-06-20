@@ -660,10 +660,7 @@ class AlasGUI(Frame):
                                 text=html_text,
                             )
                             if self._rich_log and self._rich_log.keep_bottom:
-                                run_js(
-                                    """$("#pywebio-scope-log").scrollTop("""
-                                    """$("#pywebio-scope-log").prop("scrollHeight"));"""
-                                )
+                                self._rich_log.scroll()
                 except (OSError, IOError):
                     pass
 
