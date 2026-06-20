@@ -92,7 +92,7 @@ class ConfigUpdater:
         defaults = {}
         for path, arg in deep_iter(args, depth=3):
             # 跳过 Scheduler（由 _inject_scheduler_to_tasks 单独处理）
-            if path[0] == 'Scheduler' or (len(path) > 1 and path[1] == 'Scheduler'):
+            if path[0] == 'Scheduler':
                 continue
             if isinstance(arg, dict) and 'value' in arg:
                 deep_set(defaults, path, deepcopy(arg['value']))
