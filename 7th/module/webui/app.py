@@ -120,6 +120,9 @@ class AlasGUI(Frame):
         self.inst_cache = []
         self.load_home = False
         self.af_flag = False
+        # 日志文件尾随追踪
+        self._log_positions: Dict[str, int] = {}
+        self._rich_log: Optional = None
 
     @use_scope("aside", clear=True)
     def set_aside(self) -> None:
@@ -442,6 +445,7 @@ class AlasGUI(Frame):
         )
 
         log = RichLog("log")
+        self._rich_log = log
 
         with use_scope("logs"):
             put_scope(
@@ -476,7 +480,7 @@ class AlasGUI(Frame):
         self.task_handler.add(switch_scheduler.g(), 1, True)
         self.task_handler.add(switch_log_scroll.g(), 1, True)
         self.task_handler.add(self.alas_update_overview_task, 10, True)
-        self.task_handler.add(log.put_log(self.alas), 0.25, True)
+        self.task_handler.add(self._log_tail_task(), 2, True)
 
     def _init_alas_config_watcher(self) -> None:
         def put_queue(path, value):
@@ -617,12 +621,63 @@ class AlasGUI(Frame):
             else:
                 put_text(t("Gui.Overview.NoTask")).style("--overview-notask-text--")
 
+    def _log_tail_task(self):
+        """Generator: 从日志文件尾部读取新行，追加到 Log scope。"""
+        import html as _html
+        import os as _os
+        import datetime as _dt
+
+        yield
+        try:
+            while True:
+                # 没有活跃进程或无配置 → 延时
+                if not hasattr(self, 'alas') or not self.alas_name:
+                    yield 2
+                    continue
+
+                config = self.alas_name
+                today = _dt.date.today().isoformat()
+                log_path = _os.path.join('.', 'log', f'{today}_{config}.txt')
+
+                if not _os.path.isfile(log_path):
+                    yield 2
+                    continue
+
+                pos = self._log_positions.get(config, 0)
+                try:
+                    with open(log_path, 'r', encoding='utf-8') as f:
+                        f.seek(pos)
+                        lines = f.readlines()
+                        if lines:
+                            self._log_positions[config] = f.tell()
+                            html_text = ''.join(
+                                f'<pre style="margin:0;line-height:1.2">{_html.escape(l)}</pre>\n'
+                                for l in lines
+                            )
+                            from pywebio.session import run_js
+                            run_js(
+                                """$("#pywebio-scope-log>div").append(text);""",
+                                text=html_text,
+                            )
+                            if self._rich_log and self._rich_log.keep_bottom:
+                                run_js(
+                                    """$("#pywebio-scope-log").scrollTop("""
+                                    """$("#pywebio-scope-log").prop("scrollHeight"));"""
+                                )
+                except (OSError, IOError):
+                    pass
+
+                yield 2
+        except Exception:
+            pass
+
     @use_scope("content", clear=True)
     def alas_daemon_overview(self, task: str) -> None:
         self.init_menu(name=task)
         self.set_title(t(f"Task.{task}.name"))
 
         log = RichLog("log")
+        self._rich_log = log
 
         if self.is_mobile:
             put_scope(
@@ -720,7 +775,7 @@ class AlasGUI(Frame):
 
         self.task_handler.add(switch_scheduler.g(), 1, True)
         self.task_handler.add(switch_log_scroll.g(), 1, True)
-        self.task_handler.add(log.put_log(self.alas), 0.25, True)
+        self.task_handler.add(self._log_tail_task(), 2, True)
 
     @use_scope("menu", clear=True)
     def dev_set_menu(self) -> None:
