@@ -25,3 +25,8 @@ class ManualConfig:
     SCHEDULER_PRIORITY = """
     SecretShop
     """
+
+    # ALAS 兼容接口
+    @property
+    def SERVER(self):
+        return 'cn'

@@ -1,5 +1,13 @@
 {
   "SecretShop": {
+    "Scheduler": {
+      "Enable": true,
+      "NextRun": "2020-01-01 00:00:00",
+      "Command": "SecretShop",
+      "SuccessInterval": 0,
+      "FailureInterval": 120,
+      "ServerUpdate": "00:00"
+    },
     "ShopItems": {
       "BuyBookmarks": true,
       "BuyMysticMedals": true,

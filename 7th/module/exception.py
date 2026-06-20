@@ -31,6 +31,10 @@ class ScriptEnd(Exception):
     pass
 
 
+class RequestHumanTakeover(Exception):
+    pass
+
+
 class GameStuckError(Exception):
     pass
 

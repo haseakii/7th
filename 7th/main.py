@@ -1,12 +1,11 @@
 """
 程序入口 - 第七史诗秘密商店自动刷新购买工具
 
-支持三种运行模式：
-  有界面: main.py                   （默认，直接运行带日志输出）
+支持两种运行模式：
   WebUI:  main.py --webui          （Web UI 管理界面）
-  ALAS:   main.py --alas           （使用 E7AutoScript + SecretShopTask，带调度器）
+  ALAS:   main.py                   （默认，调度器循环，自动发现并运行已启用的任务）
 
-不传参数默认走 ALAS 框架（headless），不再走旧 YAML 配置路径。
+不传参数默认走 ALAS 框架调度器循环。
 """
 
 import argparse
@@ -39,8 +38,7 @@ def _run_alas(config_name: str = "default") -> None:
     from alas import E7AutoScript
     logger.info("启动 E7AutoScript（ALAS 框架）...")
     alas = E7AutoScript(config_name=config_name)
-    if alas.init():
-        alas.run_secret_shop()
+    alas.loop()
 
 
 def _run_webui() -> None:

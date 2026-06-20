@@ -13,24 +13,12 @@ E7AutoScript — 第七史诗 ALAS 风格主调度器
 import threading
 from typing import Optional
 
-from module.logger import logger
-from module.config.config import E7Config
+import inflection
+
+from module.config.config import E7Config, TaskEnd
 from module.device.device import DeviceController
-
-
-class TaskEnd(Exception):
-    """任务正常结束。"""
-    pass
-
-
-class GameStuckError(Exception):
-    """游戏卡死，需要重启。"""
-    pass
-
-
-class ScriptError(Exception):
-    """脚本错误，需要人工介入。"""
-    pass
+from module.exception import GameStuckError, ScriptError, RequestHumanTakeover
+from module.logger import logger
 
 
 class E7AutoScript:
@@ -38,29 +26,43 @@ class E7AutoScript:
 
     stop_event: threading.Event = None
 
-    def __init__(self, config_name: str = "default", config_path: Optional[str] = None):
+    def __init__(self, config_name: str = "default", config: Optional[E7Config] = None):
         logger.hr("E7AutoScript Start", level=0)
         self.config_name = config_name
-        self.config_path = config_path
-        self.config: Optional[E7Config] = None
-        self.device: Optional[DeviceController] = None
+        self._config = config
+        self._device: Optional[DeviceController] = None
         self._stop_event = threading.Event()
+        self.failure_record = {}
+
+    @property
+    def config(self) -> E7Config:
+        if self._config is None:
+            self._config = E7Config(config_name=self.config_name)
+        return self._config
+
+    @config.setter
+    def config(self, value):
+        self._config = value
+
+    @property
+    def device(self) -> Optional[DeviceController]:
+        return self._device
 
     def init(self) -> bool:
         """初始化配置和设备连接。"""
         try:
-            self.config = E7Config(config_name=self.config_name, config_path=self.config_path)
+            _ = self.config
             logger.info("配置加载成功")
-        except Exception as e:
-            logger.error(f"配置加载失败: {e}")
+        except RequestHumanTakeover:
+            logger.critical("无可用任务，请至少启用一个任务")
             return False
         except Exception as e:
             logger.error(f"配置加载失败: {e}")
             return False
 
         try:
-            self.device = DeviceController(self.config)
-            if not self.device.connect():
+            self._device = DeviceController(self.config)
+            if not self._device.connect():
                 logger.error("设备连接失败")
                 return False
         except Exception as e:
@@ -70,42 +72,85 @@ class E7AutoScript:
         logger.info("E7AutoScript 初始化完成")
         return True
 
-    def run_secret_shop(self) -> None:
-        """运行秘密商店刷新购买任务。
+    def loop(self):
+        """ALAS 风格调度主循环。
 
-        异常处理链：
-        - TaskEnd → 正常结束
-        - GameStuckError → 尝试重启
-        - ScriptError → 请求人工介入
-        - 其他异常 → 日志记录后抛出
+        每轮循环：
+          1. config.load() — 从磁盘重新读取 JSON
+          2. get_next() — 从 JSON 发现下一个任务
+          3. run(command) — 派发到对应方法
+          4. device.config = config — 保持设备引用最新
+        """
+        logger.info(f"启动调度循环: {self.config_name}")
+
+        # 初始读取配置
+        self.config.load()
+
+        while not self._stop_event.is_set():
+            try:
+                task = self.config.get_next()
+            except RequestHumanTakeover:
+                logger.critical("没有启用的任务，退出")
+                break
+
+            command = inflection.underscore(task.command)
+            self._device.config = self.config
+            logger.hr(command, level=0)
+            success = self.run(command)
+
+            failed = self.failure_record.get(command, 0)
+            failed = 0 if success else failed + 1
+            self.failure_record[command] = failed
+            if failed >= 3:
+                logger.critical(f"任务 `{command}` 连续失败 3 次，退出")
+                break
+
+            # 重读配置（响应 WebUI 变更）
+            self.config.load()
+
+        logger.info("调度循环结束")
+
+    def run(self, command):
+        """运行指定任务。
+
+        Args:
+            command (str): 任务方法名（snake_case）
+
+        Returns:
+            bool: 是否成功完成
         """
         try:
-            # 延迟导入任务模块
-            from tasks.secret_shop import SecretShopTask
-
-            task = SecretShopTask(config=self.config, device=self.device)
-            task._stop_event = self._stop_event
-            task.run()
-
+            self.__getattribute__(command)()
+            return True
         except TaskEnd:
-            logger.info("秘密商店任务正常结束")
-        except GameStuckError:
-            logger.warning("游戏可能卡死，尝试重启设备连接")
+            logger.info(f"任务 `{command}` 正常结束")
+            return True
+        except GameStuckError as e:
+            logger.warning(f"游戏可能卡死: {e}")
             self._restart_device()
+            return False
         except ScriptError as e:
             logger.error(f"脚本错误，需要人工介入: {e}")
             raise
         except Exception as e:
-            logger.error(f"任务运行异常: {e}")
-            raise
+            logger.error(f"任务 `{command}` 异常: {e}")
+            return False
+
+    def secret_shop(self):
+        """运行秘密商店刷新购买任务。"""
+        from tasks.secret_shop import SecretShopTask
+
+        task = SecretShopTask(config=self.config, device=self.device)
+        task._stop_event = self._stop_event
+        task.run()
 
     def _restart_device(self) -> bool:
         """重启设备连接。"""
         logger.info("正在重启设备连接...")
-        if self.device:
-            self.device.disconnect()
-        if self.device:
-            return self.device.connect()
+        if self._device:
+            self._device.disconnect()
+        if self._device:
+            return self._device.connect()
         return False
 
     def stop(self) -> None:
@@ -115,10 +160,10 @@ class E7AutoScript:
 
     @property
     def running(self) -> bool:
-        return hasattr(self, '_task_thread') and self._task_thread and self._task_thread.is_alive()
+        return self._device is not None
 
 
 if __name__ == "__main__":
     alas = E7AutoScript()
     if alas.init():
-        alas.run_secret_shop()
+        alas.loop()

@@ -11,16 +11,26 @@ MRO 继承链:
 """
 
 import copy
+import operator
 import threading
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from module.logger import logger
+from module.base.filter import Filter
 from module.config.config_generated import GeneratedConfig
 from module.config.config_manual import ManualConfig
 from module.config.config_updater import ConfigUpdater, filepath_config
 from module.config.watcher import ConfigWatcher
 from module.config.deep import deep_get, deep_set
+from module.config.utils import DEFAULT_TIME, ensure_time, filepath_config as utils_filepath_config, read_file
+from module.exception import RequestHumanTakeover, ScriptError
+
+
+class TaskEnd(Exception):
+    """任务正常结束。"""
+    pass
 
 
 # ── 重映射：扁平化属性名 → args.json 嵌套路径 ─────────────────────
@@ -86,6 +96,8 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
         self._lock = threading.RLock()
         self._bound = {}  # 属性名 → 路径映射
         self._watcher_stop = threading.Event()
+        self._pending_task = []
+        self._waiting_task = []
 
         # 建立属性绑定
         self._bind_attrs()
@@ -169,6 +181,190 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
         with self._lock:
             return copy.deepcopy(self.data)
 
+    # ── 调度器接口 ──
+
+    def load(self) -> None:
+        """从磁盘重新读取配置 JSON。"""
+        with self._lock:
+            self.data = self._load()
+
+    def get_next_task(self) -> None:
+        """遍历 self.data 中所有任务，按优先级设置 pending_task / waiting_task。"""
+        pending = []
+        waiting = []
+        error = []
+        now = datetime.now().replace(microsecond=0)
+
+        for data in self.data.values():
+            func = Function(data)
+            if not func.enable:
+                continue
+            if not isinstance(func.next_run, datetime):
+                error.append(func)
+            elif func.next_run <= now:
+                pending.append(func)
+            else:
+                waiting.append(func)
+
+        f = Filter(regex=r'(.*)', attr=['command'])
+        f.load(self.SCHEDULER_PRIORITY)
+        if pending:
+            pending = f.apply(pending)
+        if waiting:
+            waiting = f.apply(waiting)
+            waiting = sorted(waiting, key=operator.attrgetter('next_run'))
+        if error:
+            pending = error + pending
+
+        self.pending_task = pending
+        self.waiting_task = waiting
+
+    def get_next(self) -> Function:
+        """返回下一个要运行的任务。
+
+        Raises:
+            RequestHumanTakeover: 没有任务启用
+        """
+        self.get_next_task()
+
+        if self.pending_task:
+            task = self.pending_task[0]
+            logger.attr('Task', task)
+            return task
+
+        if self.waiting_task:
+            task = copy.deepcopy(self.waiting_task[0])
+            logger.attr('Task', task)
+            return task
+
+        logger.critical('没有待运行或等待中的任务，请至少启用一个任务')
+        raise RequestHumanTakeover
+
+    def task_delay(self, success=None, server_update=None, target=None, minute=None, task=None):
+        """设置 Scheduler.NextRun。
+
+        Args:
+            success (bool): 成功则延迟 SuccessInterval，失败则延迟 FailureInterval
+            server_update (bool, str): 延迟到服务器更新
+            target (datetime, str, list): 延迟到指定时间
+            minute (int, float, tuple): 延迟 N 分钟
+            task (str): 设置哪个任务的 NextRun，None 为当前任务
+        """
+
+        def ensure_delta(delay):
+            return timedelta(seconds=int(ensure_time(delay, precision=3) * 60))
+
+        run = []
+        if success is not None:
+            interval = self.Scheduler_SuccessInterval if success else self.Scheduler_FailureInterval
+            run.append(datetime.now() + ensure_delta(interval))
+        if server_update is not None:
+            from module.config.utils import get_server_next_update
+            srv = server_update if isinstance(server_update, str) else self.Scheduler_ServerUpdate
+            run.append(get_server_next_update(srv))
+        if target is not None:
+            target = [target] if not isinstance(target, list) else target
+            from module.config.utils import nearest_future
+            run.append(nearest_future(target))
+        if minute is not None:
+            run.append(datetime.now() + ensure_delta(minute))
+
+        if run:
+            run = min(run).replace(microsecond=0)
+            if task is None:
+                task = self.task.command if self.task else 'SecretShop'
+            logger.info(f'延迟任务 `{task}` 至 {run}')
+            self.modified[f'{task}.Scheduler.NextRun'] = run
+            self.update()
+
+    def task_call(self, task, force_call=True):
+        """立即调用另一个任务。
+
+        Args:
+            task (str): 任务名
+            force_call (bool): 即使任务被禁用也强制调用
+
+        Returns:
+            bool: 是否成功调用
+        """
+        if deep_get(self.data, keys=f'{task}.Scheduler.NextRun', default=None) is None:
+            logger.error(f'任务 `{task}` 不存在')
+            return False
+
+        if force_call:
+            logger.info(f'任务调用: {task}')
+            self.modified[f'{task}.Scheduler.NextRun'] = datetime.now().replace(microsecond=0)
+            self.modified[f'{task}.Scheduler.Enable'] = True
+            if self.auto_update:
+                self.update()
+            return True
+        else:
+            logger.info(f'任务调用: {task} (跳过，用户已禁用)')
+            return False
+
+    @staticmethod
+    def task_stop(message=''):
+        """停止当前任务。"""
+        if message:
+            raise TaskEnd(message)
+        else:
+            raise TaskEnd
+
+    def task_switched(self):
+        """检查是否需要切换到其他任务。"""
+        prev = self.task
+        self.load()
+        new = self.get_next()
+        if prev and new and prev.command == new.command:
+            logger.info(f'继续任务 `{new}`')
+            return False
+        else:
+            logger.info(f'切换任务 `{prev}` 至 `{new}`')
+            return True
+
+    def check_task_switch(self, message=''):
+        """如果任务已切换则停止当前任务。"""
+        if self.task_switched():
+            self.task_stop(message=message)
+
+    def is_task_enabled(self, task):
+        """检查指定任务是否启用。"""
+        return bool(deep_get(self.data, keys=f'{task}.Scheduler.Enable', default=False))
+
+    @property
+    def pending_task(self) -> list:
+        return self._pending_task
+
+    @pending_task.setter
+    def pending_task(self, value):
+        self._pending_task = value
+
+    @property
+    def waiting_task(self) -> list:
+        return self._waiting_task
+
+    @waiting_task.setter
+    def waiting_task(self, value):
+        self._waiting_task = value
+
+    @staticmethod
+    def read_file(config_name, is_template=False):
+        """ALAS 兼容接口 — 读取配置文件。"""
+        path = utils_filepath_config(config_name)
+        return read_file(path)
+
+    @staticmethod
+    def write_file(config_name, data, mod_name='alas'):
+        """ALAS 兼容接口 — 写入配置文件。"""
+        path = utils_filepath_config(config_name)
+        from module.config.utils import write_file as util_write
+        util_write(path, data)
+
+    @staticmethod
+    def save_callback(key, value):
+        """ALAS 兼容的保存回调。"""
+        return []
+
     # ── YAML 迁移 ──
 
     @staticmethod
@@ -247,82 +443,36 @@ class E7Config(ConfigUpdater, ManualConfig, GeneratedConfig):
 
 
 class Function:
-    """ALAS Function 存根 — 表示调度系统中的一个可运行任务。
+    """ALAS Function — 表示调度系统中的一个可运行任务。
 
-    WebUI scheduler overview 使用此类获取待运行/等待任务列表。
-    E7 当前只有 SecretShop 一个任务。
+    从配置 JSON dict 构造，读取 Scheduler 组的数据。
     """
 
-    def __init__(self, name: str, command: str = "", next_run: str = ""):
-        self.name = name
-        self.command = command
-        self.next_run = next_run
+    def __init__(self, data):
+        if isinstance(data, dict):
+            self.enable = deep_get(data, 'Scheduler.Enable', default=False)
+            self.command = deep_get(data, 'Scheduler.Command', default='')
+            self.next_run = deep_get(data, 'Scheduler.NextRun', default=DEFAULT_TIME)
+        else:
+            self.enable = False
+            self.command = ''
+            self.next_run = DEFAULT_TIME
+
+    def __str__(self):
+        enable = 'Enable' if self.enable else 'Disable'
+        return f'{self.command} ({enable}, {str(self.next_run)})'
+
+    __repr__ = __str__
+
+    def __eq__(self, other):
+        if not isinstance(other, Function):
+            return False
+        return self.command == other.command and self.next_run == other.next_run
 
 
-class AzurLaneConfig(E7Config):
-    """ALAS AzurLaneConfig 存根 — WebUI 兼容层。
-
-    扩展 E7Config 提供 ALAS 调度器接口，使 ALAS WebUI 可正常运行。
-    E7 当前只有 SecretShop 任务，调度器返回固定值。
-    """
-
-    def __init__(self, config_name: str = 'template'):
-        super().__init__(config_name=config_name)
-
-    def load(self) -> None:
-        """加载配置（E7Config 已在 __init__ 中加载）。"""
-        pass
-
-    @property
-    def pending_task(self) -> list:
-        """待运行任务列表。"""
-        return []
-
-    @property
-    def waiting_task(self) -> list:
-        """等待中的任务列表。"""
-        return [Function('SecretShop', 'SecretShop', '')]
-
-    def get_next_task(self) -> Optional[Function]:
-        """获取下一个要运行的任务。"""
-        return Function('SecretShop', 'SecretShop', '')
-
-    def get_next(self) -> Optional[Function]:
-        """别名，兼容不同 ALAS 版本。"""
-        return self.get_next_task()
-
-    def read_file(self, config_name: str, is_template: bool = False) -> dict:
-        """读取配置文件。
-
-        Args:
-            config_name: 配置名（如 'default'）
-            is_template: 是否为模板（忽略）
-
-        Returns:
-            dict: 配置数据
-        """
-        from module.config.utils import filepath_config, read_file
-        return read_file(filepath_config(config_name))
-
-    @staticmethod
-    def write_file(config_name: str, data: dict, mod_name: str = 'alas') -> None:
-        """写入配置文件。
-
-        Args:
-            config_name: 配置名
-            data: 配置数据
-            mod_name: mod 名称（忽略）
-        """
-        from module.config.utils import filepath_config, write_file
-        write_file(filepath_config(config_name), data)
-
-    @staticmethod
-    def save_callback(key: str, value) -> list:
-        """ALAS 兼容的保存回调。
-
-        E7 不需要额外的自动保存逻辑（如 ALAS 的 "un" 过期处理）。
-
-        Returns:
-            list: 空的 (key, value) 列表
-        """
-        return []
+def name_to_function(name):
+    """从任务名构建临时 Function 对象。"""
+    func = Function({})
+    func.command = name
+    func.enable = True
+    return func
