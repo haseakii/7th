@@ -20,6 +20,7 @@ from module.config.config import E7Config, TaskEnd
 from module.device.device import DeviceController
 from module.exception import GameStuckError, ScriptError, RequestHumanTakeover
 from module.logger import logger
+from module.task.registry import get_task
 
 
 class E7AutoScript:
@@ -93,8 +94,11 @@ class E7AutoScript:
             try:
                 task = self.config.get_next()
             except RequestHumanTakeover:
-                logger.critical("没有启用的任务，退出")
-                break
+                logger.warning("没有启用的任务，调度器保持运行并等待配置变更")
+                if self._stop_event.wait(10):
+                    break
+                self.config.load()
+                continue
 
             # ── 如果任务调度时间在未来，等待（最多 60s 轮询 stop_event） ──
             now = datetime.now()
@@ -111,10 +115,10 @@ class E7AutoScript:
                 continue
 
             # ── 执行任务 ──
-            command = inflection.underscore(task.command)
+            command = task.command
             self._device.config = self.config
             self.config.task = task
-            logger.hr(command, level=0)
+            logger.hr(inflection.underscore(command), level=0)
             success = self.run(command)
 
             # ── 任务完成后更新调度时间 ──
@@ -142,8 +146,20 @@ class E7AutoScript:
         Returns:
             bool: 是否成功完成
         """
+        method = inflection.underscore(command)
         try:
-            self.__getattribute__(command)()
+            spec = get_task(command) or get_task(method)
+            if spec is not None:
+                logger.info(f"运行已注册任务 `{spec.command}`")
+                task = spec.factory(config=self.config, device=self.device, task=spec.command)
+                if hasattr(task, "_stop_event"):
+                    task._stop_event = self._stop_event
+                task.run()
+            else:
+                logger.warning(f"任务 `{command}` 未注册，回退到 E7AutoScript.{method}()")
+                if not hasattr(self, method):
+                    raise ScriptError(f"Unknown task command: {command}")
+                self.__getattribute__(method)()
             return True
         except TaskEnd:
             logger.info(f"任务 `{command}` 正常结束")

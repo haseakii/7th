@@ -18,6 +18,7 @@ from tasks.secret_shop.recognizer import (
     MAX_SCROLL_COUNT,
     ROW_SCAN_X2,
 )
+from module.vision.frame import FrameContext
 from tasks.secret_shop.ocr_engine import TextBlock
 
 
@@ -51,6 +52,21 @@ class TestShopItem:
                 position=(400, 200, 950, 290), confidence=0.9,
             )
             assert item.item_type == item_type
+
+
+class TestFrameContext:
+    def test_recognize_visible_items_captures_frame_context(self, recognizer):
+        with patch.object(recognizer, "_recognize_shelf_area", return_value=[]) as recognize:
+            assert recognizer.recognize_visible_items() == []
+
+        frame_arg = recognize.call_args.args[0]
+        assert isinstance(frame_arg, FrameContext)
+        assert frame_arg.image.shape == (720, 1280, 3)
+
+    def test_is_at_bottom_accepts_frame_context(self, recognizer):
+        image = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        assert recognizer.is_at_bottom(FrameContext(image=image), FrameContext(image=image)) is True
 
 
 class TestClassifyByText:

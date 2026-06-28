@@ -29,6 +29,7 @@ from tasks.secret_shop.navigator import (
     CONTENT_BRIGHTNESS_THRESHOLD,
     LOBBY_NAV_MIN_BRIGHTNESS,
 )
+from module.vision.frame import FrameContext
 
 
 @pytest.fixture
@@ -65,6 +66,13 @@ def _make_scene_image(
 class TestDetectCurrentScene:
     """场景检测测试"""
 
+    def test_detect_scene_uses_frame_context(self, navigator, mock_device):
+        mock_device.screenshot.return_value = _make_scene_image(
+            nav_top_bright=50, nav_mid_bright=180, content_bright=50
+        )
+
+        assert navigator.detect_current_scene() == "secret_shop"
+
     def test_detect_secret_shop(self, navigator, mock_device):
         """需求 3.1: 秘密商店特征：导航顶暗+导航中亮+内容区暗"""
         mock_device.screenshot.return_value = _make_scene_image(
@@ -98,6 +106,13 @@ class TestDetectCurrentScene:
 
 class TestIsSecretShop:
     """_is_secret_shop 检测测试"""
+
+    def test_shop_conditions_accept_frame_context(self, navigator):
+        frame = FrameContext(
+            image=_make_scene_image(nav_top_bright=40, nav_mid_bright=150, content_bright=60)
+        )
+
+        assert navigator._is_secret_shop(frame) is True
 
     def test_shop_conditions_met(self, navigator, mock_device):
         """导航顶暗+导航中亮+内容区暗 返回 True"""

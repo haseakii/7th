@@ -20,6 +20,8 @@ from typing import Dict, Union
 from module.logger import logger
 from module.base.timer import Timer
 from module.device.device import DeviceController
+from module.vision.frame import FrameContext, capture_device_frame
+from module.vision.profile import SECRET_SHOP_PROFILE
 from tasks.secret_shop.navigator import ShopNavigator
 from tasks.secret_shop.ocr_engine import OCR
 from tasks.secret_shop.purchase import PurchaseEngine, PurchaseResult, CONFIRM_BTN_POS, CANCEL_BTN_POS, POPUP_CANCEL_REGION, POPUP_CONFIRM_REGION, CONFIRM_POPUP_TIMEOUT
@@ -32,16 +34,16 @@ from tasks.secret_shop.scene_manager import SceneManager
 # ---------------------------------------------------------------------------
 
 # 刷新按钮搜索区域（底部左侧）
-REFRESH_BTN_REGION = (50, 620, 400, 718)
+REFRESH_BTN_REGION = SECRET_SHOP_PROFILE.refresh_button_region
 
 # 弹窗检测区域（居中弹窗）
-POPUP_REGION = (300, 440, 950, 550)
+POPUP_REGION = SECRET_SHOP_PROFILE.popup_region
 
 # 天空石数值区域（与标定值对齐：x=1100-1260, y=5-30）
-SKYSTONE_REGION = (1100, 0, 1260, 50)
+SKYSTONE_REGION = SECRET_SHOP_PROFILE.skystone_region
 
 # 金币数值区域（与标定值对齐）
-GOLD_REGION = (790, 5, 970, 40)
+GOLD_REGION = SECRET_SHOP_PROFILE.gold_region
 
 # 滑动翻页参数
 SCROLL_AREA = (800, 400, 800, 150)
@@ -53,7 +55,7 @@ MAX_SCROLL_COUNT = 8
 # 刷新确认弹窗等待超时
 REFRESH_CONFIRM_TIMEOUT = 3.0
 REFRESH_MAX_RETRIES = 2
-REFRESH_CONFIRM_BTN_POS = (748, 460)
+REFRESH_CONFIRM_BTN_POS = SECRET_SHOP_PROFILE.refresh_confirm_position
 SHELF_LOAD_WAIT = 0.8
 SKYSTONE_PER_REFRESH = 3
 MAX_CONSECUTIVE_ERRORS = 3
@@ -143,9 +145,31 @@ class ShopBot:
         self._skystone_check_counter = 99  # 首次检查强制 OCR
 
     # 保留 .config 属性访问（部分外部代码可能直接使用）
+    def _capture_frame(self) -> Optional[FrameContext]:
+        """Capture once and wrap the image with per-frame caches."""
+        return capture_device_frame(self.device)
+
     @property
     def config(self):
         return self._raw_config
+
+    def _should_continue_current_task(self) -> bool:
+        """Stop only SecretShop when WebUI disables this task."""
+        if self._stop_event.is_set():
+            return False
+        if not hasattr(self._raw_config, "is_task_enabled"):
+            return True
+        try:
+            if hasattr(self._raw_config, "load"):
+                self._raw_config.load()
+            enabled = self._raw_config.is_task_enabled("SecretShop")
+        except Exception as e:
+            logger.warning(f"Failed to check SecretShop enable state: {e}")
+            return True
+        if not enabled:
+            logger.info("SecretShop disabled in config; stopping current task only")
+            return False
+        return True
 
     def start(self) -> None:
         if self._running:
@@ -376,12 +400,11 @@ class ShopBot:
         Returns:
             True 如果在（或已回到）秘密商店，False 表示无法恢复。
         """
-        if image is None:
-            image = self.device.screenshot()
-        if image is None:
+        frame_or_image = image if image is not None else self._capture_frame()
+        if frame_or_image is None:
             return False
 
-        scene = self.scene_manager.detect(image)
+        scene = self.scene_manager.detect(frame_or_image)
         logger.debug(f"场景校验: {scene.value}")
 
         if scene == Scene.SECRET_SHOP:
@@ -389,12 +412,12 @@ class ShopBot:
 
         if scene == Scene.PURCHASE_POPUP:
             logger.info("场景校验: 检测到购买弹窗残留，尝试关闭")
-            if not self.purchase_engine.close_popup(image):
+            if not self.purchase_engine.close_popup(frame_or_image):
                 logger.debug("未找到取消按钮，使用固定坐标")
                 self.device.click_position(CANCEL_BTN_POS[0], CANCEL_BTN_POS[1])
             time.sleep(0.5)
             # 再次截图确认弹窗已关闭并重新校验
-            after = self.device.screenshot()
+            after = self._capture_frame()
             if after is not None and self.scene_manager.ensure(after, Scene.SECRET_SHOP):
                 return True
             # 如果仍在弹窗状态，走导航流程（更彻底的恢复）
@@ -409,7 +432,7 @@ class ShopBot:
         logger.warning("场景校验: 未知场景，尝试恢复")
         if self.navigator.handle_popup():
             time.sleep(1.0)
-            after = self.device.screenshot()
+            after = self._capture_frame()
             if after is not None and self.scene_manager.ensure(after, Scene.SECRET_SHOP):
                 return True
         return self.navigator.navigate_to_secret_shop()
@@ -429,6 +452,8 @@ class ShopBot:
                 return
             self._calibrate_before_loop()
             while not self._stop_event.is_set():
+                if not self._should_continue_current_task():
+                    break
                 refresh_count = self.stats.total_refreshes
                 logger.info(f"===== 第 {refresh_count + 1} 轮 =====")
 
@@ -510,10 +535,10 @@ class ShopBot:
 
     def _cache_refresh_button(self) -> None:
         """截图 OCR 检测刷新按钮位置并缓存。"""
-        image = self.device.screenshot()
-        if image is None:
+        frame = self._capture_frame()
+        if frame is None:
             return
-        btn = self._find_refresh_button(image)
+        btn = self._find_refresh_button(frame)
         if btn:
             self._refresh_btn_pos = btn
             logger.info(f"缓存刷新按钮位置: {btn}")
@@ -557,8 +582,8 @@ class ShopBot:
             btn_pos = self._refresh_btn_pos
             if btn_pos is None:
                 logger.info(f"寻找刷新按钮（第 {attempt} 次）")
-                image = self.device.screenshot()
-                btn_pos = self._find_refresh_button(image)
+                frame = self._capture_frame()
+                btn_pos = self._find_refresh_button(frame) if frame is not None else None
 
             if btn_pos is None:
                 logger.warning(f"未找到刷新按钮（第 {attempt} 次）")
@@ -576,8 +601,8 @@ class ShopBot:
 
             # 验证弹窗已关闭
             time.sleep(0.5)
-            verify_img = self.device.screenshot()
-            if self._find_popup_confirm(verify_img) is not None:
+            verify_frame = self._capture_frame()
+            if verify_frame is not None and self._find_popup_confirm(verify_frame) is not None:
                 logger.warning(f"刷新确认弹窗未关闭（第 {attempt} 次），重试")
                 continue
 
@@ -642,7 +667,7 @@ class ShopBot:
         prev_shelf_image = None
 
         for scroll_count in range(MAX_SCROLL_COUNT + 1):  # +1 因为第0次不滑动
-            if self._stop_event.is_set():
+            if not self._should_continue_current_task():
                 break
 
             # 第0次不滑动（已在顶部的初始视图）
@@ -678,7 +703,8 @@ class ShopBot:
                     break
 
             # 场景校验
-            if not self._ensure_secret_shop(image):
+            frame = FrameContext(image=image)
+            if not self._ensure_secret_shop(frame):
                 logger.warning("场景校验失败，终止滑动购买")
                 break
 
@@ -718,7 +744,12 @@ class ShopBot:
 
         # 每 10 轮 OCR 校准一次，避免偏差累积；首次运行立即 OCR
         if self._skystone_check_counter >= 10 or not self._skystone_known:
-            image = self.device.screenshot()
+            image = self._capture_frame()
+            if image is None:
+                logger.warning("Skystone OCR skipped: screenshot unavailable; using estimated value")
+                self._skystone_known = True
+                self._skystone_check_counter = 0
+                return self.stats.skystone_remaining >= cfg.shop.skystone_threshold
             value, conf = self._ocr.read_number(
                 image, region=SKYSTONE_REGION, min_confidence=0.3
             )

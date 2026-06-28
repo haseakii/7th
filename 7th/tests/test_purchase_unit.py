@@ -21,6 +21,7 @@ from tasks.secret_shop.purchase import (
     PURCHASE_INTERVAL_MIN,
     PURCHASE_INTERVAL_MAX,
 )
+from module.vision.frame import FrameContext
 from tasks.secret_shop.recognizer import ShopItem
 
 
@@ -111,6 +112,22 @@ class TestShouldBuy:
         assert engine.should_buy(sample_bookmark) is False
 
 
+class TestFrameContext:
+    def test_capture_frame_wraps_legacy_screenshot(self, engine):
+        frame = engine._capture_frame()
+
+        assert isinstance(frame, FrameContext)
+        assert frame.image.shape == (720, 1280, 3)
+
+    def test_scan_popup_handles_missing_frame(self, engine):
+        engine._ocr = MagicMock()
+
+        state = engine._scan_popup(None)
+
+        assert state.has_cancel is False
+        engine._ocr.read.assert_not_called()
+
+
 class TestBuyItem:
     """购买流程测试 (新版 OCR 检测)"""
 
@@ -127,6 +144,20 @@ class TestBuyItem:
             result = engine.buy_item(sample_bookmark)
             assert result.success is True
             assert result.item_type == "bookmark"
+
+    @patch("tasks.secret_shop.purchase.time.sleep")
+    def test_buy_item_scans_frame_context(self, mock_sleep, engine, sample_bookmark):
+        """鍐呴儴鎴浘搴旇灏佽涓?FrameContext 锛屼究浜?OCR 缂撳瓨銆?"""
+        from tasks.secret_shop.purchase import _PopupState
+        no_popup = _PopupState()
+        popup = _PopupState(has_cancel=True, has_buy_or_confirm=True)
+
+        with patch.object(engine, "_scan_popup") as mock_scan:
+            mock_scan.side_effect = [popup, no_popup, no_popup]
+            result = engine.buy_item(sample_bookmark)
+
+        assert result.success is True
+        assert isinstance(mock_scan.call_args_list[0].args[0], FrameContext)
 
     @patch("tasks.secret_shop.purchase.time.sleep")
     def test_purchase_with_second_confirm(self, mock_sleep, engine, mock_device, sample_bookmark):

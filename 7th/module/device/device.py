@@ -157,6 +157,15 @@ class DeviceController:
         self.image = image
         return image
 
+    def capture_frame(self):
+        """Capture a screenshot and wrap it in a per-frame context."""
+        from module.vision.frame import FrameContext
+
+        image = self.screenshot()
+        if image is None:
+            return None
+        return FrameContext(image=image)
+
     # ── 向后兼容的旧截图方法（供子类重写或外部直接调用） ──────────────────
 
     def _screenshot_adb(self) -> 'np.ndarray':

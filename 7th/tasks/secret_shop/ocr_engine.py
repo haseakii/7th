@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 
 from module.logger import logger
+from module.vision.frame import FrameContext, get_frame_image
 
 
 @dataclass
@@ -94,7 +95,14 @@ class OcrEngine:
         Returns:
             按从上到下、从左到右排序的文字块列表
         """
+        frame = image if isinstance(image, FrameContext) else None
+        if frame is not None:
+            key = frame.ocr_key(region=region, min_confidence=min_confidence, mode="text")
+            if key in frame.ocr_cache:
+                return frame.ocr_cache[key]
+
         backend = self._ensure_backend()
+        image = get_frame_image(image)
         if image is None or image.size == 0:
             return []
 
@@ -118,6 +126,8 @@ class OcrEngine:
             blocks.append(block)
 
         blocks.sort(key=lambda b: (round(b.cy / 20), b.cx))
+        if frame is not None:
+            frame.ocr_cache[key] = blocks
         return blocks
 
     def read_texts(

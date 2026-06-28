@@ -655,7 +655,13 @@ class AlasGUI(Frame):
                         if lines:
                             self._log_positions[config] = f.tell()
                             html_text = ''.join(
-                                f'<pre style="margin:0;line-height:1.2">{_html.escape(l)}</pre>\n'
+                                (
+                                    '<pre class="webui-log-line" '
+                                    'style="margin:0;line-height:1.25;'
+                                    'white-space:pre-wrap;word-break:break-word;'
+                                    'overflow:visible">'
+                                    f'{_html.escape(l)}</pre>\n'
+                                )
                                 for l in lines
                             )
                             from pywebio.session import run_js

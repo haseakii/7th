@@ -20,7 +20,9 @@ from shop_bot import (
     REFRESH_CONFIRM_BTN_POS,
     SKYSTONE_REGION,
 )
+from module.vision.frame import FrameContext
 from tasks.secret_shop.purchase import PurchaseResult
+from tasks.secret_shop.scene import Scene
 
 
 @pytest.fixture
@@ -143,6 +145,22 @@ class TestStartStop:
         bot.stop()
         assert bot._stop_event.is_set()
 
+    def test_disabled_secret_shop_stops_task_without_scheduler_event(self, bot):
+        bot._raw_config.load = MagicMock()
+        bot._raw_config.is_task_enabled = MagicMock(return_value=False)
+
+        assert bot._should_continue_current_task() is False
+        bot._raw_config.load.assert_called_once()
+        bot._raw_config.is_task_enabled.assert_called_once_with("SecretShop")
+        assert bot._stop_event.is_set() is False
+
+    def test_enabled_secret_shop_continues_task(self, bot):
+        bot._raw_config.load = MagicMock()
+        bot._raw_config.is_task_enabled = MagicMock(return_value=True)
+
+        assert bot._should_continue_current_task() is True
+        assert bot._stop_event.is_set() is False
+
     def test_start_when_already_running(self, bot):
         bot._running = True
         original_thread = bot._thread
@@ -151,6 +169,37 @@ class TestStartStop:
 
     def test_alive_false_when_not_started(self, bot):
         assert bot.alive is False
+
+
+class TestFrameContext:
+    def test_capture_frame_wraps_legacy_screenshot(self, bot):
+        frame = bot._capture_frame()
+
+        assert isinstance(frame, FrameContext)
+        assert frame.image.shape == (720, 1280, 3)
+
+    def test_ensure_secret_shop_accepts_frame_context(self, bot):
+        bot.device.screenshot.reset_mock()
+        frame = FrameContext(image=np.zeros((720, 1280, 3), dtype=np.uint8))
+
+        with patch.object(bot.scene_manager, "detect", return_value=Scene.SECRET_SHOP) as detect:
+            assert bot._ensure_secret_shop(frame) is True
+
+        detect.assert_called_once_with(frame)
+        bot.device.screenshot.assert_not_called()
+
+    def test_check_resources_reads_from_frame_context(self, bot):
+        bot._cfg.shop.skystone_threshold = 100
+        bot._skystone_check_counter = 10
+        bot._skystone_known = False
+        bot._ocr = MagicMock()
+        bot._ocr.read_number.return_value = (1234, 0.9)
+
+        assert bot.check_resources() is True
+
+        frame_arg = bot._ocr.read_number.call_args.args[0]
+        assert isinstance(frame_arg, FrameContext)
+        assert bot.stats.skystone_remaining == 1234
 
 
 class TestRunLoop:
@@ -229,6 +278,6 @@ class TestConstants:
     def test_constants_defined(self):
         assert MAX_CONSECUTIVE_ERRORS == 3
         assert SKYSTONE_PER_REFRESH == 3
-        assert REFRESH_BTN_REGION == (1000, 530, 1220, 570)
+        assert REFRESH_BTN_REGION == (50, 620, 400, 718)
         assert REFRESH_CONFIRM_BTN_POS == (748, 460)
         assert SKYSTONE_REGION == (1100, 0, 1260, 50)

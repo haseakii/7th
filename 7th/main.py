@@ -1,51 +1,48 @@
-"""
-程序入口 - 第七史诗秘密商店自动刷新购买工具
+"""Program entry point for E7 Shop Bot.
 
-支持两种运行模式：
-  WebUI:  main.py --webui          （Web UI 管理界面）
-  ALAS:   main.py                   （默认，调度器循环，自动发现并运行已启用的任务）
-
-不传参数默认走 ALAS 框架调度器循环。
+Default mode starts the ALAS-style scheduler. Use ``--webui`` to start the
+management UI instead.
 """
 
 import argparse
 import os
 import sys
 
-# PyInstaller 打包后，将 exe 所在目录设为工作目录
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     os.chdir(os.path.dirname(sys.executable))
 
 from module.logger import logger
 
 
 def main():
-    parser = argparse.ArgumentParser(description="第七史诗秘密商店自动刷新购买工具")
-    parser.add_argument("--config", default="config.yaml", help="旧配置文件路径（ALAS 模式已忽略）")
-    parser.add_argument("--webui", action="store_true", help="启动 Web UI 管理界面")
-    parser.add_argument("--alas", action="store_true", help="使用 ALAS 框架模式运行（默认行为）")
+    parser = argparse.ArgumentParser(description="E7 Shop Bot")
+    parser.add_argument("--config", default=None, help="ALAS config name, defaults to 'default'")
+    parser.add_argument("--config-name", default=None, help="ALAS config name, overrides --config")
+    parser.add_argument("--webui", action="store_true", help="Start Web UI")
+    parser.add_argument("--alas", action="store_true", help="Start ALAS scheduler mode")
     args = parser.parse_args()
 
     if args.webui:
         _run_webui()
     else:
-        # --alas 和无参数都走 ALAS 框架（默认模式）
-        _run_alas()
+        _run_alas(config_name=args.config_name or args.config or "default")
 
 
 def _run_alas(config_name: str = "default") -> None:
-    """使用 ALAS 框架模式运行（headless）。"""
+    """Run in ALAS scheduler mode."""
     from alas import E7AutoScript
-    logger.info("启动 E7AutoScript（ALAS 框架）...")
+
+    logger.info(f"Starting E7AutoScript (ALAS scheduler), config={config_name}")
     alas = E7AutoScript(config_name=config_name)
     if alas.init():
         alas.loop()
 
 
 def _run_webui() -> None:
-    """启动 ALAS 风格 Web UI。"""
-    logger.info("启动 WebUI...")
+    """Start the ALAS-style Web UI."""
+    logger.info("Starting WebUI...")
     from gui import run as run_webui
+
     run_webui()
 
 

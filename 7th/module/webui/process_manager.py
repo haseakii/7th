@@ -183,6 +183,7 @@ class ProcessManager:
         set_func_logger(func=q.put)
 
         from module.config.config import E7Config
+        from module.task.registry import get_task
 
         # Remove fake PIL module, because subprocess will use it
         remove_fake_pil_module()
@@ -190,7 +191,7 @@ class ProcessManager:
         E7Config.stop_event = e
         try:
             # Run E7 bot
-            if func == "alas" or func == "SecretShop":
+            if func == "alas":
                 from alas import E7AutoScript
 
                 if e is not None:
@@ -198,12 +199,12 @@ class ProcessManager:
                 e7 = E7AutoScript(config_name=config_name)
                 if e7.init():
                     e7.loop()
-            elif func in get_available_func():
+            elif func in get_available_func() or get_task(func) is not None:
                 from alas import E7AutoScript
 
                 e7 = E7AutoScript(config_name=config_name)
                 if e7.init():
-                    e7.run(inflection.underscore(func))
+                    e7.run(func)
             elif func in get_available_mod():
                 mod = load_mod(func)
 

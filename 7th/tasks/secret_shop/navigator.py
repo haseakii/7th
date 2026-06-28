@@ -17,6 +17,8 @@ from module.base.button import Button
 from module.base.timer import Timer
 from module.base.utils import crop
 from module.device.device import DeviceController
+from module.vision.frame import capture_device_frame, get_frame_image
+from module.vision.profile import SECRET_SHOP_PROFILE
 from tasks.secret_shop.scene import Scene
 
 # ---------------------------------------------------------------------------
@@ -64,9 +66,9 @@ COLOR_THRESHOLD = 50
 # 场景检测亮度阈值（2026-05-08 实机校准）
 # - 秘密商店 (实测 ~55)：nav_top=53, nav_mid=177, content=55
 # - 游戏大厅 (实测 ~185)：nav_top=185, nav_mid=205, content=201
-SECRET_SHOP_SIDEBAR_THRESHOLD = 80    # 左侧导航顶部亮度上限（低于此值可能是秘密商店）
-LOBBY_NAV_MIN_BRIGHTNESS = 100         # 大厅导航顶部最低亮度
-CONTENT_BRIGHTNESS_THRESHOLD = 100     # 内容区域亮度阈值（大厅 > 100, 秘密商店 < 100）
+SECRET_SHOP_SIDEBAR_THRESHOLD = SECRET_SHOP_PROFILE.secret_shop_sidebar_threshold
+LOBBY_NAV_MIN_BRIGHTNESS = SECRET_SHOP_PROFILE.lobby_nav_min_brightness
+CONTENT_BRIGHTNESS_THRESHOLD = SECRET_SHOP_PROFILE.content_brightness_threshold
 
 # 导航默认超时（秒）
 NAVIGATION_TIMEOUT = 30.0
@@ -87,6 +89,10 @@ class ShopNavigator:
     def __init__(self, device: DeviceController):
         self.device = device
 
+    def _capture_frame(self):
+        """Capture once and wrap the image with per-frame caches."""
+        return capture_device_frame(self.device)
+
     def detect_current_scene(self) -> Scene:
         """检测当前界面状态。
 
@@ -97,7 +103,7 @@ class ShopNavigator:
         Returns:
             Scene 枚举值。
         """
-        image = self.device.screenshot()
+        image = self._capture_frame()
 
         if self._is_secret_shop(image):
             logger.info("场景检测: 秘密商店")
@@ -125,6 +131,10 @@ class ShopNavigator:
             bool: 是否在秘密商店
         """
         # 左侧导航顶部亮度检查
+        image = get_frame_image(image)
+        if image is None:
+            return False
+
         nav_top = crop(image, (80, 200, 160, 260))
         nav_top_bright = float(nav_top[:, :, :3].mean())
 
@@ -160,6 +170,10 @@ class ShopNavigator:
             bool: 是否在大厅
         """
         # 左侧导航顶部
+        image = get_frame_image(image)
+        if image is None:
+            return False
+
         nav_top = crop(image, (80, 200, 160, 260))
         nav_top_bright = float(nav_top[:, :, :3].mean())
 
@@ -221,7 +235,10 @@ class ShopNavigator:
         Returns:
             bool: 是否检测到并关闭了弹窗
         """
-        image = self.device.screenshot()
+        frame = self._capture_frame()
+        image = get_frame_image(frame)
+        if image is None:
+            return False
 
         if POPUP_CLOSE_BTN.appear_on(image, threshold=COLOR_THRESHOLD):
             logger.info("检测到弹窗，点击关闭")

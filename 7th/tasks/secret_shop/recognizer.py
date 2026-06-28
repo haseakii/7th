@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 
 from module.logger import logger
+from module.vision.frame import FrameContext, capture_device_frame, get_frame_image
 from tasks.secret_shop.ocr_engine import OCR
 
 # ---------------------------------------------------------------------------
@@ -178,12 +179,20 @@ class ItemRecognizer:
         # OCR 引擎使用模块级单例
         self._ocr = OCR
 
+    def _capture_frame(self) -> Optional[FrameContext]:
+        """Capture once and wrap the image with per-frame caches."""
+        return capture_device_frame(self.device)
+
     # ------------------------------------------------------------------
     # 动态行检测（保留原方案，效果稳定）
     # ------------------------------------------------------------------
 
     def _find_item_rows(self, image: np.ndarray) -> List[Tuple[int, int]]:
         """垂直扫描物品区域，动态检测物品行。"""
+        image = get_frame_image(image)
+        if image is None:
+            return []
+
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         strip = gray[:, ITEM_SCAN_X1:ITEM_SCAN_X2]
 
@@ -440,7 +449,11 @@ class ItemRecognizer:
 
     def _recognize_shelf_area(self, image: np.ndarray) -> List[ShopItem]:
         """对整个货架区域做一次 OCR，按行分割解析。"""
-        item_rows = self._find_item_rows(image)
+        raw_image = get_frame_image(image)
+        if raw_image is None:
+            return []
+
+        item_rows = self._find_item_rows(raw_image)
         if not item_rows:
             return []
 
@@ -484,7 +497,7 @@ class ItemRecognizer:
             识别出的物品列表。
         """
         if image is None:
-            image = self.device.screenshot()
+            image = self._capture_frame()
         if image is None:
             return []
 
@@ -507,7 +520,7 @@ class ItemRecognizer:
     def scroll_and_recognize(self) -> List[ShopItem]:
         """滑动翻页并识别新物品，直到到达底部。"""
         all_new_items: List[ShopItem] = []
-        prev_image = self.device.image
+        prev_image = FrameContext(image=self.device.image) if self.device.image is not None else None
 
         for scroll_count in range(MAX_SCROLL_COUNT):
             start = (SCROLL_AREA[0], SCROLL_AREA[1])
@@ -515,7 +528,7 @@ class ItemRecognizer:
             self.device.swipe(start, end)
             time.sleep(SCROLL_WAIT)
 
-            curr_image = self.device.screenshot()
+            curr_image = self._capture_frame()
             if curr_image is None:
                 break
 
@@ -540,6 +553,8 @@ class ItemRecognizer:
     # ------------------------------------------------------------------
 
     def is_at_bottom(self, prev_image, curr_image) -> bool:
+        prev_image = get_frame_image(prev_image)
+        curr_image = get_frame_image(curr_image)
         if prev_image is None or curr_image is None:
             return False
         prev_crop = prev_image[

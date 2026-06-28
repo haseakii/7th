@@ -8,13 +8,15 @@ PurchaseEngine 购买引擎
 import random
 import time
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from typing import Dict
 
 from module.logger import logger
 from module.base.timer import Timer
 from module.device.device import DeviceController
+from module.vision.frame import FrameContext, capture_device_frame
+from module.vision.profile import SECRET_SHOP_PROFILE
 from tasks.secret_shop.ocr_engine import OCR
 from tasks.secret_shop.recognizer import ShopItem, BUY_BTN_X
 
@@ -29,16 +31,16 @@ ITEM_TYPE_TO_CONFIG_KEY = {
 }
 
 # 弹窗按钮 OCR 搜索区域（底部弹窗区域）
-POPUP_REGION = (300, 440, 950, 550)
-POPUP_CONFIRM_REGION = (640, 440, 950, 550)  # 右侧"购买"/"确认"按钮
-POPUP_CANCEL_REGION = (300, 440, 640, 550)   # 左侧"取消"按钮
+POPUP_REGION = SECRET_SHOP_PROFILE.popup_region
+POPUP_CONFIRM_REGION = SECRET_SHOP_PROFILE.popup_confirm_region
+POPUP_CANCEL_REGION = SECRET_SHOP_PROFILE.popup_cancel_region
 
 # 弹窗按钮固定坐标（游戏内位置不变，比 OCR 可靠）
-CONFIRM_BTN_POS = (818, 508)
-CANCEL_BTN_POS = (482, 508)
+CONFIRM_BTN_POS = SECRET_SHOP_PROFILE.confirm_position
+CANCEL_BTN_POS = SECRET_SHOP_PROFILE.cancel_position
 
 # 金币不足文字检测区域
-INSUFFICIENT_GOLD_REGION = (400, 280, 880, 400)
+INSUFFICIENT_GOLD_REGION = SECRET_SHOP_PROFILE.insufficient_gold_region
 
 # 购买确认弹窗等待超时（秒）
 CONFIRM_POPUP_TIMEOUT = 3.0
@@ -91,6 +93,10 @@ class PurchaseEngine:
         else:
             self._buy_list = {}
 
+    def _capture_frame(self) -> Optional[FrameContext]:
+        """Capture once and wrap the image with per-frame caches."""
+        return capture_device_frame(self.device)
+
     # ------------------------------------------------------------------
     # 弹窗 OCR 扫描（单次 OCR 检测所有按钮状态）
     # ------------------------------------------------------------------
@@ -107,6 +113,9 @@ class PurchaseEngine:
         Returns:
             _PopupState 包含所有检测到的按钮。
         """
+        if image is None:
+            return _PopupState()
+
         scan_region = (
             POPUP_REGION[0],
             INSUFFICIENT_GOLD_REGION[1],
@@ -145,7 +154,7 @@ class PurchaseEngine:
         截图弹窗区域，用 OCR 检测"购买"/"确认"按钮位置，
         与固定坐标 CONFIRM_BTN_POS 对比，偏差过大则日志警告。
         """
-        image = self.device.screenshot()
+        image = self._capture_frame()
         if image is None:
             logger.warning("校准: 无法截图，跳过")
             return
@@ -201,6 +210,9 @@ class PurchaseEngine:
         Returns:
             (x, y) 点击坐标，或 None
         """
+        if image is None:
+            return None
+
         blocks = self._ocr.read(image, region=region, min_confidence=0.4)
         for block in blocks:
             if button_text in block.text:
@@ -285,7 +297,7 @@ class PurchaseEngine:
         time.sleep(0.6)
 
         # 3. 首次截图 OCR — 正常情况弹窗已出现，一次搞定
-        image = self.device.screenshot()
+        image = self._capture_frame()
         confirmed = False
 
         if image is not None:
@@ -310,7 +322,7 @@ class PurchaseEngine:
                 time.sleep(0.5)
 
                 # 检查二次确认
-                retry_img = self.device.screenshot()
+                retry_img = self._capture_frame()
                 retry_popup = self._scan_popup(retry_img)
                 if retry_popup.has_cancel and retry_popup.has_buy_or_confirm:
                     logger.info("检测到二次确认弹窗")
@@ -325,7 +337,7 @@ class PurchaseEngine:
             confirm_timer.start()
 
             while not confirm_timer.reached():
-                image = self.device.screenshot()
+                image = self._capture_frame()
                 if image is None:
                     continue
 
@@ -347,7 +359,7 @@ class PurchaseEngine:
                     self._click_confirm_in_popup(image)
                     time.sleep(0.5)
 
-                    retry_img = self.device.screenshot()
+                    retry_img = self._capture_frame()
                     retry_popup = self._scan_popup(retry_img)
                     if retry_popup.has_cancel and retry_popup.has_buy_or_confirm:
                         logger.info("检测到二次确认弹窗")
@@ -364,7 +376,7 @@ class PurchaseEngine:
             logger.warning(f"确认弹窗未出现，重试点击: {item.item_type}")
             self.device.click_position(click_x, click_y)
             time.sleep(1.0)
-            retry_img = self.device.screenshot()
+            retry_img = self._capture_frame()
 
             retry_popup = self._scan_popup(retry_img)
             if retry_popup.has_cancel and retry_popup.has_buy_or_confirm:
@@ -384,7 +396,7 @@ class PurchaseEngine:
 
         # 6. 验证购买结果
         time.sleep(0.6)
-        verify_img = self.device.screenshot()
+        verify_img = self._capture_frame()
 
         verify_popup = self._scan_popup(verify_img)
         if verify_popup.has_cancel and verify_popup.has_buy_or_confirm:
@@ -392,7 +404,7 @@ class PurchaseEngine:
             retry_timer = Timer(2.0)
             retry_timer.start()
             while not retry_timer.reached():
-                img = self.device.screenshot()
+                img = self._capture_frame()
                 retry = self._scan_popup(img)
                 if retry.has_cancel and retry.has_buy_or_confirm:
                     self._click_confirm_in_popup(img)
@@ -401,7 +413,7 @@ class PurchaseEngine:
                 time.sleep(0.3)
 
             time.sleep(0.5)
-            final_img = self.device.screenshot()
+            final_img = self._capture_frame()
             final_popup = self._scan_popup(final_img)
             if final_popup.has_cancel and final_popup.has_buy_or_confirm:
                 reason = "弹窗确认后仍未关闭"
@@ -425,10 +437,11 @@ class PurchaseEngine:
         image = self.device.image
         if image is None:
             return False
-        if self._detect_confirm_popup(image):
-            self._click_confirm_in_popup(image)
+        frame = FrameContext(image=image)
+        if self._detect_confirm_popup(frame):
+            self._click_confirm_in_popup(frame)
             time.sleep(0.5)
-            next_img = self.device.screenshot()
+            next_img = self._capture_frame()
             if self._detect_confirm_popup(next_img):
                 self._click_confirm_in_popup(next_img)
                 time.sleep(0.5)
