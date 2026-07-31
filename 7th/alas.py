@@ -28,12 +28,20 @@ class E7AutoScript:
 
     stop_event: threading.Event = None
 
-    def __init__(self, config_name: str = "default", config: Optional[E7Config] = None):
+    def __init__(
+        self,
+        config_name: str = "default",
+        config: Optional[E7Config] = None,
+        stop_event: Optional[threading.Event] = None,
+    ):
         logger.hr("E7AutoScript Start", level=0)
         self.config_name = config_name
         self._config = config
         self._device: Optional[DeviceController] = None
-        self._stop_event = threading.Event()
+        inherited_stop_event = stop_event if stop_event is not None else type(self).stop_event
+        self._stop_event = (
+            inherited_stop_event if inherited_stop_event is not None else threading.Event()
+        )
         self.failure_record = {}
 
     @property

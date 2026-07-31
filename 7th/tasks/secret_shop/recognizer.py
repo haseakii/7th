@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 
 from module.logger import logger
+from module.vision.profile import SECRET_SHOP_PROFILE
 from module.vision.frame import FrameContext, capture_device_frame, get_frame_image
 from tasks.secret_shop.ocr_engine import OCR
 
@@ -121,9 +122,9 @@ STOCK_REGION = (1090, 1140)    # 库存数量区域（x≈1112, 1/1 或 0/1）
 TEXT_ROW_BRIGHTNESS_MAX = 160
 
 # 滑动相关
-SCROLL_AREA = (640, 400, 640, 150)
+SCROLL_AREA = SECRET_SHOP_PROFILE.item_scroll_area
 SCROLL_WAIT = 0.5
-SHELF_COMPARE_AREA = (300, 120, 900, 540)
+SHELF_COMPARE_AREA = SECRET_SHOP_PROFILE.shelf_compare_area
 BOTTOM_SIMILARITY_THRESHOLD = 0.95
 MAX_SCROLL_COUNT = 5
 

@@ -194,15 +194,13 @@ class ProcessManager:
             if func == "alas":
                 from alas import E7AutoScript
 
-                if e is not None:
-                    E7AutoScript.stop_event = e
-                e7 = E7AutoScript(config_name=config_name)
+                e7 = E7AutoScript(config_name=config_name, stop_event=e)
                 if e7.init():
                     e7.loop()
             elif func in get_available_func() or get_task(func) is not None:
                 from alas import E7AutoScript
 
-                e7 = E7AutoScript(config_name=config_name)
+                e7 = E7AutoScript(config_name=config_name, stop_event=e)
                 if e7.init():
                     e7.run(func)
             elif func in get_available_mod():

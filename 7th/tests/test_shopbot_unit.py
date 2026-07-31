@@ -89,6 +89,19 @@ class TestRunStatistics:
         assert stats.skystone_remaining == 2850
 
 
+class TestRefreshButtonDetection:
+    def test_raw_image_runs_ocr_once_for_all_keywords(self, bot):
+        image = np.zeros((720, 1280, 3), dtype=np.uint8)
+        with patch.object(bot._ocr, "read", return_value=[]) as read_mock:
+            assert bot._find_refresh_button(image) is None
+
+        read_mock.assert_called_once_with(
+            image,
+            region=REFRESH_BTN_REGION,
+            min_confidence=0.3,
+        )
+
+
 class TestShouldContinue:
     def test_continue_when_resources_sufficient(self, bot):
         assert bot.should_continue(500, 100, 10, 200) is True

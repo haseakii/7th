@@ -46,7 +46,7 @@ SKYSTONE_REGION = SECRET_SHOP_PROFILE.skystone_region
 GOLD_REGION = SECRET_SHOP_PROFILE.gold_region
 
 # 滑动翻页参数
-SCROLL_AREA = (800, 400, 800, 150)
+SCROLL_AREA = SECRET_SHOP_PROFILE.scroll_area
 SCROLL_WAIT = 0.5
 SCROLL_SETTLE_TIMEOUT = 3.0  # 滑动后稳定超时（秒）
 SCROLL_FRAME_SIMILARITY = 0.98  # 连续两帧相似度阈值（判定滑动动画完成）  # 等待滑动动画结束
@@ -555,8 +555,8 @@ class ShopBot:
         搜索关键词包括 '重置'、'刷新'，降低置信度阈值以适配小字按钮。
         """
         keywords = ("立即更新", "重置", "刷新")
+        blocks = self._ocr.read(image, region=REFRESH_BTN_REGION, min_confidence=0.3)
         for kw in keywords:
-            blocks = self._ocr.read(image, region=REFRESH_BTN_REGION, min_confidence=0.3)
             for block in blocks:
                 if kw in block.text:
                     cx, cy = int(block.cx), int(block.cy)

@@ -35,8 +35,10 @@ class SecretShopTask(ModuleBase):
         self.bot._stop_event = self._stop_event
 
         self._running = True
-        self.bot.run_loop()
-        self._running = False
+        try:
+            self.bot.run_loop()
+        finally:
+            self._running = False
 
     def stop(self) -> None:
         """停止任务。"""

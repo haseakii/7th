@@ -18,8 +18,9 @@ def main():
     parser = argparse.ArgumentParser(description="E7 Shop Bot")
     parser.add_argument("--config", default=None, help="ALAS config name, defaults to 'default'")
     parser.add_argument("--config-name", default=None, help="ALAS config name, overrides --config")
-    parser.add_argument("--webui", action="store_true", help="Start Web UI")
-    parser.add_argument("--alas", action="store_true", help="Start ALAS scheduler mode")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--webui", action="store_true", help="Start Web UI")
+    mode.add_argument("--alas", action="store_true", help="Start ALAS scheduler mode (default)")
     args = parser.parse_args()
 
     if args.webui:
@@ -34,8 +35,18 @@ def _run_alas(config_name: str = "default") -> None:
 
     logger.info(f"Starting E7AutoScript (ALAS scheduler), config={config_name}")
     alas = E7AutoScript(config_name=config_name)
-    if alas.init():
-        alas.loop()
+    try:
+        if alas.init():
+            alas.loop()
+    except KeyboardInterrupt:
+        logger.info("收到 Ctrl+C，正在退出")
+        alas.stop()
+    finally:
+        if alas.device is not None:
+            try:
+                alas.device.disconnect()
+            except Exception as e:
+                logger.warning(f"断开设备连接异常: {e}")
 
 
 def _run_webui() -> None:

@@ -36,7 +36,9 @@ class SecretShopProfile:
     confirm_position: Point = (818, 508)
     cancel_position: Point = (482, 508)
 
+    # ShopBot and ItemRecognizer intentionally swipe at different x positions.
     scroll_area: Tuple[int, int, int, int] = (800, 400, 800, 150)
+    item_scroll_area: Tuple[int, int, int, int] = (640, 400, 640, 150)
     shelf_compare_area: Region = (300, 120, 900, 540)
 
 
